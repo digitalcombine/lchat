@@ -1,0 +1,255 @@
+/*                                                                  -*- c++ -*-
+ * Copyright (c) 2018 Ron R Wills <ron.rwsoft@gmail.com>
+ *
+ * This file is part of the Curses C++ Library.
+ *
+ * Curses C++ Library is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Meat is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with the Network Streams Library.  If not, see
+ * <http://www.gnu.org/licenses/>.
+ */
+
+#ifdef HAVE_NCURSES_H
+#include <ncurses.h>
+#else
+#ifdef HAVE_CURSES_H
+#include <curses.h>
+#endif
+#endif
+#include <iostream>
+
+// Turn the curses library macros into inline functions.
+
+#ifdef addch
+inline int (addch)(const chtype ch) { return addch(ch); }
+#undef addch
+#endif
+
+#ifdef attron
+inline int (attron)(int attr) { return attron(attr); }
+#undef attron
+#endif
+
+#ifdef attroff
+inline int (attroff)(int attr) { return attroff(attr); }
+#undef attroff
+#endif
+
+#ifdef attrset
+inline int (attrset)(int attr) { return attrset(attr); }
+#undef attrset
+#endif
+
+#ifdef clrtoeol
+inline int (clrtoeol)() { return clrtoeol(); }
+#undef clrtoeol
+#endif
+
+#ifdef getch
+inline int (getch)() { return getch(); }
+#undef getch
+#endif
+
+#ifdef getyx
+inline void (getyx)(WINDOW *win, int &y, int &x) { getyx(win, y, x); }
+#undef getyx
+#endif
+
+#ifdef getmaxyx
+inline void (getmaxyx)(WINDOW *win, int &y, int &x) { getmaxyx(win, y, x); }
+#undef getmaxyx
+#endif
+
+
+#ifdef hline
+inline int (hline)(chtype ch, int n) { return hline(ch, n); }
+#undef hline
+#endif
+
+#ifdef vline
+inline int (vline)(chtype ch, int n) { return vline(ch, n); }
+#undef vline
+#endif
+
+#ifdef mvwaddstr
+inline int (mvwaddstr)(WINDOW *win, int y, int x, const char *str) {
+  return mvwaddstr(win, y, x, str);
+}
+#undef mvwaddstr
+#endif
+
+#ifdef waddch
+inline int (waddch)(WINDOW *win, const chtype ch) { return waddch(win, ch); }
+#undef waddch
+#endif
+
+#ifdef wattrset
+inline int (wattrset)(WINDOW *win, int attr) { return wattrset(win, attr); }
+#undef wattrset
+#endif
+
+#ifdef wclrtoeol
+inline int (wclrtoeol)(WINDOW *win) { return wclrtoeol(win); }
+#undef wclrtoeol
+#endif
+
+#ifdef whline
+inline int (whline)(WINDOW *win, chtype ch, int n) {
+  return whline(win, ch, n);
+}
+#undef whline
+#endif
+
+#ifdef wvline
+inline int (wvline)(WINDOW *win, chtype ch, int n) {
+  return wvline(win, ch, n);
+}
+#undef wvline
+#endif
+
+#ifdef mvwhline
+inline int (mvwhline)(WINDOW *win, int y, int x, chtype ch, int n) {
+  return mvwhline(win, y, x, ch, n);
+}
+#undef mvwhline
+#endif
+
+#ifdef mvwvline
+inline int (mvwvline)(WINDOW *win, int y, int x, chtype ch, int n) {
+  return mvwvline(win, y, x, ch, n);
+}
+#undef mvwvline
+#endif
+
+#ifndef _CPPCURSES_H
+#define _CPPCURSES_H
+
+namespace curses {
+
+  class Terminal {
+  public:
+		static inline const char *type() { return ttytype; }
+
+    Terminal() { ::initscr(); }
+    ~Terminal() { ::endwin(); }
+
+    inline int clear() { return ::clear(); }
+
+    inline int doupdate() { return ::doupdate(); }
+
+    inline int erase() { return ::erase(); }
+
+    inline int refresh() { return ::refresh(); }
+
+    inline int cbreak() { return ::cbreak(); }
+    inline int nocbreak() { return ::nocbreak(); }
+
+    inline int raw() { return ::raw(); }
+    inline int noraw() { return ::noraw(); }
+
+    inline int echo() { return ::echo(); }
+    inline int noecho() { return ::noecho(); }
+
+		inline int halfdelay(int time) { return ::halfdelay(time); }
+
+    inline int getch() { return ::getch(); }
+  };
+
+  class Window {
+  public:
+		Window() : _win(::stdscr) {}
+    Window(int width, int height, int startx, int starty) {
+      _win = ::newwin(height, width, starty, startx);
+    }
+    ~Window() throw() { ::delwin(_win); }
+
+		inline int keypad(bool use) { return ::keypad(_win, use); }
+
+    inline int nodelay(bool bf) { return ::nodelay(_win, bf); }
+
+    inline int scrollok(bool bf) { return ::scrollok(_win, bf); }
+
+    inline int clear() { return ::wclear(_win); }
+    inline int clrtoeol() { return ::wclrtoeol(_win); }
+
+    inline int outrefresh() { return wnoutrefresh(_win); }
+    inline int refresh() { return wrefresh(_win); }
+
+		inline int attron(int attrs) { return ::wattron(_win, attrs); }
+		inline int attroff(int attrs) { return ::wattroff(_win, attrs); }
+		inline int attrset(int attrs) { return ::wattrset(_win, attrs); }
+
+    inline int getch() { return ::wgetch(_win); }
+
+    inline int addch(chtype ch) { return ::waddch(_win, ch); }
+    inline int addch(const std::string &value) {
+      return ::waddstr(_win, value.c_str());
+    }
+    inline int addch(int y, int x, const std::string &value) {
+      return ::mvwaddstr(_win, y, x, value.c_str());
+    }
+
+    inline int hline(chtype ch, int n) { return ::whline(_win, ch, n); }
+    inline int hline(int y, int x, chtype ch, int n) {
+      return ::mvwhline(_win, y, x, ch, n);
+    }
+    inline int vline(int y, int x, chtype ch, int n) {
+      return ::mvwvline(_win, y, x, ch, n);
+    }
+
+		int printw(const char *mesg, ...);
+		int printw(int y, int x, const char *mesg, ...);
+
+		inline void getyx(int &y, int &x) { ::getyx(_win, y, x); }
+    inline int move(int y, int x) { return ::wmove(_win, y, x); }
+
+    inline void getmaxyx(int &y, int &x) { ::getmaxyx(_win, y, x); }
+
+  private:
+    WINDOW *_win;
+
+    Window(WINDOW *win) : _win(win) {};
+  };
+
+	class Colors {
+	public:
+		static const unsigned int BLACK   = COLOR_BLACK;
+		static const unsigned int RED     = COLOR_RED;
+		static const unsigned int GREEN   = COLOR_GREEN;
+		static const unsigned int YELLOW  = COLOR_YELLOW;
+		static const unsigned int BLUE    = COLOR_BLUE;
+		static const unsigned int MAGENTA = COLOR_MAGENTA;
+		static const unsigned int CYAN    = COLOR_CYAN;
+		static const unsigned int WHITE   = COLOR_WHITE;
+
+		static inline bool has_colors() { return (::has_colors() == TRUE); }
+		static inline bool can_change_color() {
+			return (::can_change_color() == TRUE);
+		}
+		static inline int start() { return start_color(); }
+
+		static inline int colors() { return COLORS; }
+		static inline int pairs() { return COLOR_PAIRS; }
+
+		static inline int pair(int index, int fg, int bg) {
+			return init_pair(index, fg, bg);
+		}
+		static inline int pair(int index) { return COLOR_PAIR(index); }
+
+		static inline int color(int index, int r, int g, int b) {
+			return init_color(index, r, g, b);
+		}
+
+	};
+}
+
+#endif /* _CPPCURSES_H */

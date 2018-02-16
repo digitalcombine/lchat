@@ -1,0 +1,7 @@
+TODO
+====
+
+- Use c++11 regex library for parsing. What's there is to simply and
+   can be tricked :(
+- Should use is_atty in lchat to allow piping so lchat can be used in
+   scripts.

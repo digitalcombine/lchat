@@ -1,0 +1,58 @@
+.TH lchat 1 "14 Febuarary 2018" "version 1.0"
+
+.SH NAME
+lchat - Local chat console client.
+
+.SH SYNOPSIS
+.B lchat
+[-s \fIpath\fR]
+.PP
+.B lchat
+-V
+
+.SH DESCRIPTION
+
+\fBlchat\fR is a simple console chat client. The local chat suite is a very
+simple 'IRC-ish' chat system over a unix socket for a single computer/server.
+Ideally the target for this software is for headless servers allowing admins
+and other users to easily communicate on the console.
+.PP
+There is no real protocol involved, what you type is sent exactly as
+is. To send a message to everyone, simple type a line and hit enter.
+.PP
+Private messages can be sent by starting a message with a users name
+followed by a colon and a space as follows:
+.PP
+\fBroot: I wish I had your power!\fR
+.PP
+Similar to IRC, the chat daemon understands a few command that start with
+the / character.
+.IP "/quit or /exit"
+The server will close the connection.
+.IP /who
+Displays a line of all the users in the chat session.
+.IP "/version or /about"
+Displays version information about the server.
+.IP /help
+Displays a simple help screen.
+
+.SH OPTIONS
+.IP "-s path"
+Specifies the \fIpath\fR to the chat servers unix socket file.
+.IP -V
+Displays version information.
+
+.SH AUTHOR
+Written by Ron R Wills.
+
+.SH COPYRIGHT
+Copyright © 2018 Ron R Wills <ron.rwsoft@gmail.com>.
+.br
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.
+.br
+This is free software: you are free  to  change  and  redistribute  it.
+.br
+There is NO WARRANTY, to the extent permitted by law.
+
+.SH "SEE ALSO"
+.BR lchatd (1).
