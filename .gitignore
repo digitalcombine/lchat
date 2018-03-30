@@ -33,6 +33,7 @@ Makefile.in
 *.o
 *.obj
 *.la
+.deps
 
 # Compiled Dynamic libraries
 *.so
