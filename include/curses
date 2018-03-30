@@ -23,6 +23,8 @@
 #else
 #ifdef HAVE_CURSES_H
 #include <curses.h>
+#else
+#error Curses header not found
 #endif
 #endif
 #include <iostream>
@@ -170,7 +172,7 @@ namespace curses {
     Window(int width, int height, int startx, int starty) {
       _win = ::newwin(height, width, starty, startx);
     }
-    ~Window() throw() { ::delwin(_win); }
+    ~Window() throw() { if (_win != ::stdscr) ::delwin(_win); }
 
 		inline int keypad(bool use) { return ::keypad(_win, use); }
 
@@ -211,6 +213,9 @@ namespace curses {
 
 		inline void getyx(int &y, int &x) { ::getyx(_win, y, x); }
     inline int move(int y, int x) { return ::wmove(_win, y, x); }
+
+    inline int resize(int y, int x) { return ::wresize(_win, y, x); }
+    inline int mvwin(int y, int x) { return ::mvwin(_win, y, x); }
 
     inline void getmaxyx(int &y, int &x) { ::getmaxyx(_win, y, x); }
 
