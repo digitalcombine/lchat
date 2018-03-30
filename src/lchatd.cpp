@@ -314,7 +314,7 @@ int main(int argc, char *argv[]) {
       cwd_path = optarg;
       break;
     default:
-      std::cerr << "Unknown option -" << optopt << std::endl;
+      std::cerr << "Unknown option -" << (char)optopt << std::endl;
       return EXIT_FAILURE;
     }
   }
