@@ -126,7 +126,10 @@ void Chat::operator ()(curses::Window &input) {
       if (_scroll_buffer.size() > _buffer_size)
         _scroll_buffer.resize(_buffer_size);
 
-      update();
+      if (_buffer_location > 0)
+        update(1);
+      else
+        update();
       input.noutrefresh();
     } catch (sockets::ionotready &err) {
       chatio.clear();
