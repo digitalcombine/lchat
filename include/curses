@@ -180,10 +180,11 @@ namespace curses {
 
     inline int scrollok(bool bf) { return ::scrollok(_win, bf); }
 
+    inline int erase() { return ::werase(_win); }
     inline int clear() { return ::wclear(_win); }
     inline int clrtoeol() { return ::wclrtoeol(_win); }
 
-    inline int outrefresh() { return wnoutrefresh(_win); }
+    inline int noutrefresh() { return wnoutrefresh(_win); }
     inline int refresh() { return wrefresh(_win); }
 
 		inline int attron(int attrs) { return ::wattron(_win, attrs); }
