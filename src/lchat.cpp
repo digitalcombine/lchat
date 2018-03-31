@@ -21,6 +21,7 @@
 #include "nstream"
 #include "curses"
 #include <iostream>
+#include <list>
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
@@ -41,6 +42,7 @@ static int C_PRVMSG    = 6;
 sockets::iostream chatio;
 std::string sock_path = "/var/lib/lchat/sock";
 std::string my_name;
+curses::Terminal *terminal;
 
 // Global event flags.
 bool update_user_list = false;
@@ -49,31 +51,23 @@ int terminal_resize = 0;
 /**
  */
 
-class Input : public curses::Window {
-public:
-  Input(int width, int height, int startx, int starty);
-
-  void operator ()(curses::Terminal &term);
-  void update();
-
-private:
-  std::string _line;
-  bool _idle;
-};
-
-/**
- * @todo Add a list of lines for scrolling through the messages.
- */
-
 class Chat : public curses::Window {
 public:
   Chat(int width, int height, int startx, int starty);
 
   void operator ()(curses::Window &input);
 
+  void update();
+  void update(int offset);
+
 protected:
 
   void print(const std::string &line);
+
+private:
+  std::list<std::string> _scroll_buffer;
+  unsigned int _buffer_size;
+  unsigned int _buffer_location;
 };
 
 /**
@@ -86,60 +80,20 @@ public:
   void update(curses::Window &input);
 };
 
-/******************************************************************************
- * class Input
+/**
  */
 
- /****************
-  * Input::Input *
-  ****************/
+class Input : public curses::Window {
+public:
+  Input(int width, int height, int startx, int starty);
 
-Input::Input(int width, int height, int startx, int starty)
-  : curses::Window(width, height, startx, starty) {
-  update();
-}
+  void operator ()(curses::Terminal &term, Chat &chat);
+  void update();
 
-/**********************
- * Input::operator () *
- **********************/
-
-void Input::operator ()(curses::Terminal &term) {
-  for (;;) {
-    int ch = term.getch();
-    switch (ch) {
-    case ERR:
-      return;
-    case '\n':
-      chatio << _line << std::endl;
-      _line = "";
-      update();
-      usleep(100);
-      return;
-    case KEY_BACKSPACE:
-      if (not _line.empty()) {
-        _line.resize(_line.length() - 1);
-        update();
-      }
-      break;
-    default:
-      if (isprint(ch)) {
-        _line += ch;
-        update();
-      }
-      break;
-    }
-  }
-}
-
-/*****************
- * Input::update *
- *****************/
-
-void Input::update() {
-  clear();
-  printw(0, 0, "> %s", _line.c_str());
-  refresh();
-}
+private:
+  std::string _line;
+  bool _idle;
+};
 
 /******************************************************************************
  * class Chat
@@ -150,10 +104,11 @@ void Input::update() {
  **************/
 
 Chat::Chat(int width, int height, int startx, int starty)
-  : curses::Window(width, height, startx, starty) {
+  : curses::Window(width, height, startx, starty), _buffer_size(500),
+    _buffer_location(0) {
   scrollok(true);
   move(height - 1, 0);
-  refresh();
+  noutrefresh();
 }
 
 /*********************
@@ -167,13 +122,56 @@ void Chat::operator ()(curses::Window &input) {
       getline(chatio, in);
       if (in.empty()) return;
 
-      this->print(in);
-      input.refresh();
+      _scroll_buffer.push_front(in);
+      if (_scroll_buffer.size() > _buffer_size)
+        _scroll_buffer.resize(_buffer_size);
+
+      update();
+      input.noutrefresh();
     } catch (sockets::ionotready &err) {
       chatio.clear();
       return;
     }
   }
+}
+
+/***************
+* Chat::update *
+***************/
+
+void Chat::update() {
+  int w, h;
+  getmaxyx(h, w);
+
+  erase();
+  move(h - 1, 0);
+
+  if (not _scroll_buffer.empty()) {
+    auto it = _scroll_buffer.rend();
+    for (int c = 0;
+         c < h + (int)_buffer_location and it != _scroll_buffer.rbegin();
+         c++, it--);
+
+    for (int c = 0; c < h and it != _scroll_buffer.rend(); c++, it++)
+      this->print(*it);
+  }
+
+  noutrefresh();
+}
+
+void Chat::update(int offset) {
+  int w, h;
+  getmaxyx(h, w);
+
+  if ((int)_buffer_location + offset < 0) {
+    _buffer_location = 0;
+  } else {
+    _buffer_location += offset;
+
+    if (_buffer_location > _scroll_buffer.size() - h)
+      _buffer_location = _scroll_buffer.size() - h;
+  }
+  update();
 }
 
 /***************
@@ -238,7 +236,6 @@ void Chat::print(const std::string &line) {
         update_user_list = true;
     }
   }
-  refresh();
 }
 
 /******************************************************************************
@@ -271,16 +268,94 @@ void UserList::update(curses::Window &input) {
     }
   }
 
-  this->clear();
-  move(0,0);
+  erase();
+  move(0, 0);
   size_t pos;
   while ((pos = users.find(" ")) != users.npos)
     users[pos] = '\n';
   printw(users.c_str());
 
-  refresh();
-  input.refresh();
+  noutrefresh();
+  input.noutrefresh();
   update_user_list = false;
+}
+
+/******************************************************************************
+ * class Input
+ */
+
+ /****************
+  * Input::Input *
+  ****************/
+
+Input::Input(int width, int height, int startx, int starty)
+  : curses::Window(width, height, startx, starty) {
+  update();
+}
+
+/**********************
+ * Input::operator () *
+ **********************/
+
+void Input::operator ()(curses::Terminal &term, Chat &chat) {
+  for (;;) {
+    int ch = term.getch();
+    switch (ch) {
+    case ERR: // Keyboard input timeout
+      return;
+    case '\n':
+      chatio << _line << std::endl;
+      _line = "";
+      update();
+      usleep(100);
+      return;
+    case KEY_BACKSPACE:
+      if (not _line.empty()) {
+        _line.resize(_line.length() - 1);
+        update();
+      }
+      break;
+    case KEY_UP:
+      chat.update(1);
+      update();
+      break;
+    case KEY_DOWN:
+      chat.update(-1);
+      update();
+      break;
+    case KEY_PPAGE: { // Page up key
+      int w, h;
+      chat.getmaxyx(h, w);
+      chat.update(h);
+      update();
+      break;
+    }
+    case KEY_NPAGE: { // Page down key
+      int w, h;
+      chat.getmaxyx(h, w);
+      chat.update(-h);
+      update();
+      break;
+    }
+    default:
+      if (isprint(ch)) {
+        _line += ch;
+        update();
+      }
+      break;
+    }
+  }
+}
+
+/*****************
+ * Input::update *
+ *****************/
+
+void Input::update() {
+  erase();
+  printw(0, 0, "> %s", _line.c_str());
+  noutrefresh();
+  terminal->doupdate();
 }
 
 /******************************************************************************
@@ -310,7 +385,7 @@ static void resize_ui() {
   int w, h;
   curses::Window terminal_window;
   terminal_window.getmaxyx(h, w);
-  terminal_window.clear();
+  terminal_window.erase();
 
   // Update the terminal window
   terminal_window.attron(curses::Colors::pair(C_TITLE) | A_BOLD);
@@ -320,26 +395,25 @@ static void resize_ui() {
   terminal_window.attroff(curses::Colors::pair(C_TITLE) | A_BOLD);
   terminal_window.hline(h - 2, 0, ACS_HLINE, w);
   terminal_window.vline(1, w - 11, ACS_VLINE, h - 3);
-  terminal_window.refresh();
+  terminal_window.noutrefresh();
 
   // Resize the chat window.
-  chat_window->clear();
   chat_window->mvwin(1, 0);
   chat_window->resize(h - 3, w - 12);
-  chat_window->move(h - 4, 0);
+  chat_window->update();
 
   // Resize the user list window.
-  users_window->clear();
+  //users_window->erase();
   users_window->mvwin(1, w - 10);
   users_window->resize(h - 3, 10);
+  users_window->noutrefresh();
 
   // Resize the input window.
-  input_window->clear();
   input_window->mvwin(h - 1, 0);
   input_window->resize(1, w);
+  input_window->update();
 
   update_user_list = true;
-  input_window->update();
   terminal_resize--;
 }
 
@@ -383,6 +457,7 @@ int main(int argc, char *argv[]) {
 
   // Setup the terminal.
   curses::Terminal term;
+  terminal = &term;
   curses::Colors::start();
   term.cbreak();
   term.noecho();
@@ -416,7 +491,7 @@ int main(int argc, char *argv[]) {
   term_win.printw(0, (w - title.length()) / 2, title.c_str());
   term_win.attroff(curses::Colors::pair(C_TITLE) | A_BOLD);
   term_win.hline(h - 2, 0, ACS_HLINE, w);
-  term_win.refresh();
+  term_win.noutrefresh();
 
   Chat chat(w - 12, h - 3, 0, 1);
   term_win.vline(1, w - 11, ACS_VLINE, h - 3);
@@ -424,6 +499,7 @@ int main(int argc, char *argv[]) {
   UserList users(10, h - 3, w - 10, 1);
 
   Input input(w, 1, 0, h - 1);
+  term.doupdate();
 
   // Setup for terminal resizing events.
   chat_window = &chat;
@@ -433,10 +509,11 @@ int main(int argc, char *argv[]) {
 
   // The main loop.
   while(chatio) {
-    input(term);
+    input(term, chat);
     chat(input);
     if (update_user_list) users.update(input);
     if (terminal_resize) resize_ui();
+    term.doupdate();
   }
 
   return EXIT_SUCCESS;
