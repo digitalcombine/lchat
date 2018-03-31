@@ -60,6 +60,9 @@ public:
   void update();
   void update(int offset);
 
+  void scroll_buffer(unsigned int size);
+  void auto_scroll(bool on);
+
 protected:
 
   void print(const std::string &line);
@@ -68,6 +71,7 @@ private:
   std::list<std::string> _scroll_buffer;
   unsigned int _buffer_size;
   unsigned int _buffer_location;
+  bool _auto_scroll;
 };
 
 /**
@@ -105,7 +109,7 @@ private:
 
 Chat::Chat(int width, int height, int startx, int starty)
   : curses::Window(width, height, startx, starty), _buffer_size(500),
-    _buffer_location(0) {
+    _buffer_location(0), _auto_scroll(false) {
   scrollok(true);
   move(height - 1, 0);
   noutrefresh();
@@ -125,8 +129,13 @@ void Chat::operator ()(curses::Window &input) {
       _scroll_buffer.push_front(in);
       if (_scroll_buffer.size() > _buffer_size)
         _scroll_buffer.resize(_buffer_size);
+      if (_auto_scroll)
+        _buffer_location = 0;
 
-      update();
+      if (_buffer_location > 0)
+        update(1);
+      else
+        update();
       input.noutrefresh();
     } catch (sockets::ionotready &err) {
       chatio.clear();
@@ -174,9 +183,27 @@ void Chat::update(int offset) {
   update();
 }
 
+/***********************
+ * Chat::scroll_buffer *
+ ***********************/
+
+void Chat::scroll_buffer(unsigned int size) {
+  _buffer_size = size;
+  if (_buffer_size == 0)
+    throw std::range_error("Invalid value for scroll buffer");
+}
+
+/*********************
+ * Chat::auto_scroll *
+ *********************/
+
+void Chat::auto_scroll(bool on) {
+  _auto_scroll = on;
+}
+
 /***************
-* Chat::print *
-***************/
+ * Chat::print *
+ ***************/
 
 void Chat::print(const std::string &line) {
   size_t pos = line.find(": ");
@@ -425,8 +452,23 @@ int main(int argc, char *argv[]) {
 
   // Parse the command line options.
   int opt;
-  while ((opt = getopt(argc, argv, "s:")) != -1) {
+  unsigned int scrollback = 500;
+  bool auto_scroll = false;
+
+  while ((opt = getopt(argc, argv, "as:l:")) != -1) {
     switch (opt) {
+    case 'a':
+      auto_scroll = true;
+      break;
+    case 'l':
+      scrollback = atoi(optarg);
+      if (scrollback == 0) {
+        std::cerr << "OPTIONS ERROR: Invalid value \"" << optarg
+                  << "\" for the number of scrollback lines"
+                  << '\n';
+        return EXIT_FAILURE;
+      }
+      break;
     case 's':
       sock_path = optarg;
       break;
@@ -491,10 +533,12 @@ int main(int argc, char *argv[]) {
   term_win.printw(0, (w - title.length()) / 2, title.c_str());
   term_win.attroff(curses::Colors::pair(C_TITLE) | A_BOLD);
   term_win.hline(h - 2, 0, ACS_HLINE, w);
+  term_win.vline(1, w - 11, ACS_VLINE, h - 3);
   term_win.noutrefresh();
 
   Chat chat(w - 12, h - 3, 0, 1);
-  term_win.vline(1, w - 11, ACS_VLINE, h - 3);
+  chat.scroll_buffer(scrollback);
+  chat.auto_scroll(auto_scroll);
 
   UserList users(10, h - 3, w - 10, 1);
 

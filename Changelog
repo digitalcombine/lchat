@@ -1,4 +1,22 @@
+Version 1.2.1
+2018-03-31 Ron Wills <ron.rwsoft@gmail.com>
+
+* Added scrollback command line options to chat client.
+* Added server response to unknown chat commands.
+* Updated documentation.
+
+Version 1.2.0
+2018-03-31 Ron Wills <ron.rwsoft@gmail.com>
+
+* Added scrollback buffer to chat window.
+* Elminated flicker when redrawing windows.
+
+Version 1.1.0
+2018-03-30 Ron Wills <ron.rwsoft@gmail.com>
+
+* Chat client handled terminal resizing events.
+
 Version 1.0.0
 2018-02-15 Ron Wills <ron.rwsoft@gmail.com>
 
-* Initial release
+* Initial release.
