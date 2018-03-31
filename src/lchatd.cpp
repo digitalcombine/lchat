@@ -159,6 +159,9 @@ void ChatClient::recv() {
             << "redistribute it.\n"
             << "There is NO WARRANTY, to the extent permitted by law."
             << std::endl;
+      } else {
+        ios << "? Unknown chat command '" << in << "'\n"
+            << "? Type '/help' to get a list of chat commands." << std::endl;
       }
 
     } else {
