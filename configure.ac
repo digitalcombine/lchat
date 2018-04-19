@@ -2,12 +2,16 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([lchat], [1.2.1], [ron.rwsoft@gmail.com])
+AC_INIT([lchat], [1.2.2], [ron.rwsoft@gmail.com])
 AM_INIT_AUTOMAKE
 AM_SILENT_RULES
 AC_CONFIG_SRCDIR([src/curses.cpp])
 AC_CONFIG_MACRO_DIR([m4])
 
+# Platform detection.
+AC_CANONICAL_HOST
+
+# Some build options.
 AC_ARG_ENABLE([testing],
   [AS_HELP_STRING([--enable-testing],
     [compile in testing code (default is no)])],
@@ -31,6 +35,7 @@ AM_CONDITIONAL([DEBUG], [test x$debug = xtrue])
 AC_PROG_MKDIR_P
 
 # Checks for programs.
+AC_LANG(C++)
 AC_PROG_CXX
 
 # Checks for libraries.

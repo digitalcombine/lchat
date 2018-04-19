@@ -18,7 +18,6 @@
  * <http://www.gnu.org/licenses/>.
  */
 
-
 #include "nstream"
 #include <iostream>
 #include <set>
@@ -31,6 +30,11 @@
 #include <syslog.h>
 #include <sys/stat.h>
 #include <signal.h>
+#if defined(__FreeBSD__)
+#include <sys/types.h>
+#include <sys/un.h>
+#include <sys/ucred.h>
+#endif
 
 // Global settings.
 static std::string sock_path = "/var/lib/lchat/sock";
@@ -66,28 +70,51 @@ sockets::server<ChatClient> chat_server;
  ***********************/
 
 void ChatClient::connect(int sockfd) {
+#if defined(__FreeBSD__)
+  struct xucred ucred;
+  int len = sizeof(struct xucred);
+  int oval;
+
+  if (setsockopt(sockfd, 0, LOCAL_CREDS, &oval, sizeof(oval)) == -1) {
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_ERR),
+           "Unable to determine connected peer: %s", strerror(errno));
+    throw sockets::exception(
+      std::string("Unable to determine connected peer: ") +
+      strerror(errno));
+  }
+#else
   struct ucred ucred;
   int len = sizeof(struct ucred);
+#endif
 
   syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO), "New client connection");
 
   // Get the clients UID.
+#if defined(__FreeBSD__)
+  if (getsockopt(sockfd, 0, LOCAL_PEERCRED,
+                 &ucred, (socklen_t *)&len) == -1) {
+#else
   if (getsockopt(sockfd, SOL_SOCKET, SO_PEERCRED,
                  &ucred, (socklen_t *)&len) == -1) {
+#endif
     syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_ERR),
            "Unable to determine connected peer: %s", strerror(errno));
     throw sockets::exception(
-      std::string("Unable to determine connected peer:") +
+      std::string("Unable to determine connected peer: ") +
       strerror(errno));
   }
 
   // Now get the clients username.
+#if defined(__FreeBSD__)
+  struct passwd *pw_entry = getpwuid(ucred.cr_uid);
+#else
   struct passwd *pw_entry = getpwuid(ucred.uid);
+#endif
   if (pw_entry == NULL) {
     syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_ERR),
            "Unable to determine connected user: %s", strerror(errno));
     throw sockets::exception(
-      std::string("Unable to determine connected user:") +
+      std::string("Unable to determine connected user: ") +
       strerror(errno));
   }
 
