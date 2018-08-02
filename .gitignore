@@ -43,3 +43,4 @@ Makefile.in
 # Built files
 /src/lchat
 /src/lchatd
+/extra/lchatd.service

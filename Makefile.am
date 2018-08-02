@@ -1,6 +1,6 @@
 #                                                           -*- Makefile.am -*-
 
-SUBDIRS=include src man
+SUBDIRS=include src man extra
 EXTRA_DIST = Changelog
 
 install-data-local:

@@ -32,6 +32,13 @@ AC_ARG_ENABLE([debug],
        esac], [debug=false])
 AM_CONDITIONAL([DEBUG], [test x$debug = xtrue])
 
+AC_ARG_WITH([systemd],
+  [AS_HELP_STRING([--with-systemd],
+    [Support systemd service for the local chat server])],
+  [with_systemd=true],
+  [])
+AM_CONDITIONAL([SYSTEMD], [test x$with_systemd = xtrue])
+
 AC_PROG_MKDIR_P
 
 # Checks for programs.
@@ -61,5 +68,6 @@ AX_CHECK_COMPILE_FLAG([-std=c++11],
 AC_CONFIG_FILES([Makefile
                  include/Makefile
                  src/Makefile
-                 man/Makefile])
+                 man/Makefile
+                 extra/Makefile])
 AC_OUTPUT
