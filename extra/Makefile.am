@@ -1,5 +1,7 @@
 # /lib/systemd/system/
 
+EXTRA_DIST=lchatd.service.in
+
 if SYSTEMD
 install-data-local: lchatd.service
 	$(MKDIR_P) "$(DESTDIR)/lib/systemd/system"
@@ -13,8 +15,7 @@ lchatd.service: Makefile
 		test -f ./$@.in || srcdir=$(srcdir)/; \
 		$(edit) $${srcdir}$@.in >$@.tmp
 
-	chmod +x $@.tmp
-	chmod a-w $@.tmp
+	chmod a-xw $@.tmp
 	mv $@.tmp $@
 
 lchatd.service: lchatd.service.in
