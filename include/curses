@@ -18,6 +18,10 @@
  * <http://www.gnu.org/licenses/>.
  */
 
+#ifdef HAVE_NCURSESW_CURSES_H
+#define NCURSES_WIDECHAR 1
+#include <ncursesw/curses.h>
+#else
 #ifdef HAVE_NCURSES_H
 #include <ncurses.h>
 #else
@@ -25,6 +29,7 @@
 #include <curses.h>
 #else
 #error Curses header not found
+#endif
 #endif
 #endif
 #include <iostream>

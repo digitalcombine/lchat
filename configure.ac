@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([lchat], [1.2.2], [ron.rwsoft@gmail.com])
+AC_INIT([lchat], [1.2.3], [ron.rwsoft@gmail.com])
 AM_INIT_AUTOMAKE
 AM_SILENT_RULES
 AC_CONFIG_SRCDIR([src/curses.cpp])
@@ -49,9 +49,10 @@ AC_PROG_CXX
 
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h netinet/in.h sys/socket.h unistd.h])
-AC_CHECK_HEADERS([ncurses.h], [],
-  [AC_CHECK_HEADERS([curses.h], [],
-     [AC_MSG_ERROR([Curses library headers not found])])])
+AC_CHECK_HEADERS([ncursesw/curses.h], [],
+  [AC_CHECK_HEADERS([ncurses.h], [],
+    [AC_CHECK_HEADERS([curses.h], [],
+      [AC_MSG_ERROR([Curses library headers not found])])])])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_CHECK_HEADER_STDBOOL
