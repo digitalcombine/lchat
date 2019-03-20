@@ -50,9 +50,8 @@ AC_PROG_CXX
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h netinet/in.h sys/socket.h unistd.h])
 AC_CHECK_HEADERS([ncursesw/curses.h], [],
-  [AC_CHECK_HEADERS([ncurses.h], [],
-    [AC_CHECK_HEADERS([curses.h], [],
-      [AC_MSG_ERROR([Curses library headers not found])])])])
+  [AC_CHECK_HEADERS([curses.h], [],
+     [AC_MSG_ERROR([Curses library headers not found])])])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_CHECK_HEADER_STDBOOL

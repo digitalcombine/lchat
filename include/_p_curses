@@ -1,0 +1,164 @@
+/*                                                                  -*- c++ -*-
+ * Copyright (c) 2018 Ron R Wills <ron.rwsoft@gmail.com>
+ *
+ * This file is part of the Curses C++ Library.
+ *
+ * Curses C++ Library is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Meat is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with the Network Streams Library.  If not, see
+ * <http://www.gnu.org/licenses/>.
+ */
+
+ #ifdef HAVE_NCURSESW_CURSES_H
+ #define NCURSES_WIDECHAR 1
+ #include <ncursesw/curses.h>
+ #else
+ #ifdef HAVE_CURSES_H
+ #include <curses.h>
+ #else
+ #error Curses header not found
+ #endif
+ #endif
+
+ /* This is a private header to convert the macro functions found in the
+  * curses library into inline functions to prevent namespace collisions.
+  *
+  * We placed this here to prevent cluttering up the curses header.
+  */
+
+ #ifdef addch
+ inline int (addch)(const chtype ch) { return addch(ch); }
+ #undef addch
+ #endif
+
+ #ifdef attron
+ inline int (attron)(int attr) { return attron(attr); }
+ #undef attron
+ #endif
+
+ #ifdef attroff
+ inline int (attroff)(int attr) { return attroff(attr); }
+ #undef attroff
+ #endif
+
+ #ifdef attrset
+ inline int (attrset)(int attr) { return attrset(attr); }
+ #undef attrset
+ #endif
+
+ #ifdef bkgd
+ inline int (bkgd)(chtype ch) { return bkgd(ch); }
+ #undef bkgd
+ #endif
+
+#ifdef border
+inline int (border)(chtype ls, chtype rs, chtype ts, chtype bs, chtype tl,
+                    chtype tr, chtype bl, chtype br) {
+  return border(ls, rs, ts, bs, tl, tr, bl, br);
+}
+#undef border
+#endif
+
+ #ifdef clrtobot
+ inline int (clrtobot)() { return clrtobot(); }
+ #undef clrtobot
+ #endif
+
+ #ifdef clrtoeol
+ inline int (clrtoeol)() { return clrtoeol(); }
+ #undef clrtoeol
+ #endif
+
+ #ifdef getch
+ inline int (getch)() { return getch(); }
+ #undef getch
+ #endif
+
+ #ifdef getyx
+ inline void (getyx)(WINDOW *win, int &y, int &x) { getyx(win, y, x); }
+ #undef getyx
+ #endif
+
+ #ifdef getmaxyx
+ inline void (getmaxyx)(WINDOW *win, int &y, int &x) { getmaxyx(win, y, x); }
+ #undef getmaxyx
+ #endif
+
+ #ifdef getparyx
+ inline void (getparyx)(WINDOW *win, int &y, int &x) { getparyx(win, y, x); }
+ #undef getparyx
+ #endif
+
+#ifdef getbegyx
+ inline void (getbegyx)(WINDOW *win, int &y, int &x) { getbegyx(win, y, x); }
+ #undef getbegyx
+ #endif
+
+ #ifdef hline
+ inline int (hline)(chtype ch, int n) { return hline(ch, n); }
+ #undef hline
+ #endif
+
+ #ifdef vline
+ inline int (vline)(chtype ch, int n) { return vline(ch, n); }
+ #undef vline
+ #endif
+
+ #ifdef mvwaddstr
+ inline int (mvwaddstr)(WINDOW *win, int y, int x, const char *str) {
+   return mvwaddstr(win, y, x, str);
+ }
+ #undef mvwaddstr
+ #endif
+
+ #ifdef waddch
+ inline int (waddch)(WINDOW *win, const chtype ch) { return waddch(win, ch); }
+ #undef waddch
+ #endif
+
+ #ifdef wattrset
+ inline int (wattrset)(WINDOW *win, int attr) { return wattrset(win, attr); }
+ #undef wattrset
+ #endif
+
+ #ifdef wclrtoeol
+ inline int (wclrtoeol)(WINDOW *win) { return wclrtoeol(win); }
+ #undef wclrtoeol
+ #endif
+
+ #ifdef whline
+ inline int (whline)(WINDOW *win, chtype ch, int n) {
+   return whline(win, ch, n);
+ }
+ #undef whline
+ #endif
+
+ #ifdef wvline
+ inline int (wvline)(WINDOW *win, chtype ch, int n) {
+   return wvline(win, ch, n);
+ }
+ #undef wvline
+ #endif
+
+ #ifdef mvwhline
+ inline int (mvwhline)(WINDOW *win, int y, int x, chtype ch, int n) {
+   return mvwhline(win, y, x, ch, n);
+ }
+ #undef mvwhline
+ #endif
+
+ #ifdef mvwvline
+ inline int (mvwvline)(WINDOW *win, int y, int x, chtype ch, int n) {
+   return mvwvline(win, y, x, ch, n);
+ }
+ #undef mvwvline
+ #endif
