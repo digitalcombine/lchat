@@ -162,3 +162,10 @@ inline int (border)(chtype ls, chtype rs, chtype ts, chtype bs, chtype tl,
  }
  #undef mvwvline
  #endif
+
+ #ifdef scroll
+ inline int (scroll)(WINDOW *win) {
+   return scroll(win);
+ }
+ #undef scroll
+ #endif
