@@ -22,9 +22,42 @@
 #include <cstring>
 #include <stdarg.h>
 
+#ifdef DEBUG
+#include <fstream>
+
+static std::ofstream debug_log;
+#endif
+
 /*****************************************************************************
  * class curs::terminal
  */
+
+/****************************
+ * curs::terminal::terminal *
+ ****************************/
+
+void curs::terminal::initialize() {
+#ifdef DEBUG
+  if (not debug_log.is_open())
+      debug_log.open("curses.log");
+  debug_log << "TERM: Initializing" << std::endl;
+#endif
+  ::initscr();
+  ::use_default_colors();
+  ::assume_default_colors(-1, -1);
+}
+
+/*****************************
+ * curs::terminal::~terminal *
+ *****************************/
+
+void curs::terminal::restore() noexcept {
+#ifdef DEBUG
+  debug_log << "TERM: Restoring" << std::endl;
+  debug_log.close();
+#endif
+  ::endwin();
+}
 
 /*******************************
  * static curs::terminal::type *
@@ -34,23 +67,26 @@ std::string curs::terminal::type() {
   return ttytype;
 }
 
-/****************************
- * curs::terminal::terminal *
- ****************************/
+/*************************
+ * curs::terminal::clear *
+ *************************/
 
-curs::terminal::terminal() {
-  ::initscr();
-  ::use_default_colors();
-  ::assume_default_colors(-1,-1);
+void curs::terminal::clear() {
+#ifdef DEBUG
+  //debug_log << "TERM: update" << std::endl;
+#endif
+  ::clear();
 }
 
-/*****************************
- * curs::terminal::~terminal *
- *****************************/
+/**************************
+ * curs::terminal::update *
+ **************************/
 
-curs::terminal::~terminal() {
-  ::endwin();
-  ::refresh();
+void curs::terminal::update() {
+#ifdef DEBUG
+  //debug_log << "TERM: update" << std::endl;
+#endif
+  ::doupdate();
 }
 
 /**************************
@@ -58,8 +94,25 @@ curs::terminal::~terminal() {
  **************************/
 
 void curs::terminal::cbreak(bool value) {
+#ifdef DEBUG
+  debug_log << "TERM: cbreak = " << std::boolalpha << value
+            << std::endl;
+#endif
   if (value) ::cbreak();
   else ::nocbreak();
+}
+
+/***********************
+ * curs::terminal::raw *
+ ***********************/
+
+void curs::terminal::raw(bool value) {
+#ifdef DEBUG
+  debug_log << "TERM: raw = " << std::boolalpha << value
+            << std::endl;
+#endif
+  if (value) ::raw();
+  else ::noraw();
 }
 
 /************************
@@ -67,17 +120,25 @@ void curs::terminal::cbreak(bool value) {
  ************************/
 
 void curs::terminal::echo(bool value) {
+#ifdef DEBUG
+  debug_log << "TERM: echo = " << std::boolalpha << value
+            << std::endl;
+#endif
   if (value) ::echo();
   else ::noecho();
 }
 
-/*******************************
- * curs::terminal::show_cursor *
- *******************************/
+/**************************
+ * curs::terminal::cursor *
+ **************************/
 
-void curs::terminal::show_cursor(bool value) {
-  if (value ) ::curs_set(0);
-  else :: curs_set(1);
+void curs::terminal::cursor(bool value) {
+#ifdef DEBUG
+  debug_log << "TERM: cursor = " << std::boolalpha << value
+            << std::endl;
+#endif
+  if (value) ::curs_set(1);
+  else :: curs_set(0);
 }
 
 /*****************************************************************************
@@ -89,10 +150,17 @@ void curs::terminal::show_cursor(bool value) {
  ******************************/
 
 curs::windowbuf::windowbuf(WINDOW *win, bool free_window , size_t buffer)
-  : _window(win), _free_window(free_window), _obuf(buffer) {
-
-  if (win == nullptr)
+  : _window(win), _free_window(free_window), _use_stdscr(false),
+    _obuf(buffer) {
+  if (win == nullptr) {
     throw std::runtime_error("Null curses window");
+  }
+
+  if (win == ::stdscr) _use_stdscr = true;
+
+#ifdef DEBUG
+  debug_log << "WIN: new " << (void *)_window << std::endl;
+#endif
 
   // Setup the stream buffers.
   char *base = &_obuf.front();
@@ -100,7 +168,12 @@ curs::windowbuf::windowbuf(WINDOW *win, bool free_window , size_t buffer)
 }
 
 curs::windowbuf::~windowbuf() noexcept {
-  if (_free_window) ::delwin(_window);
+  if (_free_window and not _use_stdscr) {
+#ifdef DEBUG
+    debug_log << "WIN: free " << (void *)_window << std::endl;
+#endif
+    ::delwin(_window);
+  }
 }
 
 /*****************************
@@ -137,10 +210,17 @@ bool curs::windowbuf::oflush() {
   char *buf = pbase();
 
   if (wlen > 0) {
-    int result = ::waddnstr(_window, buf, wlen);
-    if (result == ERR) return false;
+    if (_use_stdscr) {
+      int result = ::waddnstr(::stdscr, buf, wlen);
+      if (result == ERR) return false;
 
-    wnoutrefresh(_window);
+      wnoutrefresh(::stdscr);
+    } else {
+      int result = ::waddnstr(_window, buf, wlen);
+      if (result == ERR) return false;
+
+      wnoutrefresh(_window);
+    }
   }
 
   // Reset the buffers.
@@ -232,11 +312,18 @@ bool curs::padbuf::oflush() {
  ************************/
 
 curs::window::window() : std::ostream(&_windowbuf), _windowbuf(::stdscr) {
+#ifdef DEBUG
+  debug_log << "WIN: Getting stdscr" << std::endl;
+#endif
 }
 
 curs::window::window(int x, int y, int width, int height)
   : std::ostream(&_windowbuf),
   _windowbuf(::newwin(height, width, y, x), true) {
+#ifdef DEBUG
+  debug_log << "WIN: (" << x << ", " << y << ", " << width << ", "
+            << height << ")" << std::endl;
+#endif
 }
 
 curs::window::window(const window &parent, int x, int y, int width, int height)
@@ -445,9 +532,10 @@ std::ostream &curs::cursor::operator()(std::ostream &os) const {
     os << std::flush;
     if (_op == POSITION)
       ::wmove(osptr->_windowbuf.window(), _y, _x);
-    if (_op == VISIBLITY)
-      if (_show) ::curs_set(0);
-      else ::curs_set(1);
+    if (_op == VISIBLITY) {
+      if (_show) ::curs_set(1);
+      else ::curs_set(0);
+    }
   }
   return os;
 }
@@ -539,23 +627,53 @@ bool curs::palette::can_change_color() {
 }
 
 /*****************************************************************************
+ * class curs::resize_event_hander
+ */
+
+curs::resize_event_handler::resize_event_handler()
+  : _orig_handler(signal(SIGWINCH, curs::resize_event_handler::_callback)) {
+  _handler = this;
+}
+
+curs::resize_event_handler::~resize_event_handler() noexcept {
+}
+
+void curs::resize_event_handler::resize_event() {
+}
+
+curs::resize_event_handler *curs::resize_event_handler::_handler;
+
+void curs::resize_event_handler::_callback(int signal) {
+  if (signal == SIGWINCH and _handler) {
+    ::endwin();  // Recreate stdscr
+    ::refresh();
+
+    _handler->resize_event(); // Call the resize event handler.
+  }
+}
+
+/*****************************************************************************
  * class curs::keyboard_event_hander
  */
 
-static curs::keyboard_event_hander *_focused = nullptr;
+static curs::keyboard_event_handler *_focused = nullptr;
 
-curs::keyboard_event_hander::keyboard_event_hander() {}
+curs::keyboard_event_handler::keyboard_event_handler() {
+  // Just make sure we have something with keyboard focus.
+  if (not _focused) _focused = this;
+}
 
-void curs::keyboard_event_hander::focus() {
-  if (_focused != nullptr)
-    _focused->lose_focus();
+void curs::keyboard_event_handler::focus() {
+  // Someone is losing focus.
+  if (_focused != nullptr) _focused->lose_focus();
 
+  // Someone is gaining focus.
   _focused = this;
-
   gain_focus();
 }
 
-bool curs::keyboard_event_hander::has_focus() const {
+bool curs::keyboard_event_handler::has_focus() const {
+  return (_focused == this);
 }
 
 /*****************************************************************************
@@ -581,26 +699,33 @@ curs::mouse_event_handler::~mouse_event_handler() noexcept {
 
 static bool _do_events = true;
 
+/*************************
+ * curs::events::process *
+ *************************/
+
+void curs::events::process() {
+  int c;
+  MEVENT event;
+
+  c = ::getch();
+  if (c == KEY_MOUSE) {
+    // Dispatch mouse events.
+    if (getmouse(&event) == OK) {
+      for (auto &evt: mouse_handlers)
+        evt->event(event.id, event.x, event.y, event.bstate);
+    }
+  } else if (_focused != nullptr) {
+    // Dispatch the key event.
+    _focused->key_event(c);
+  }
+}
+
 /**********************
  * curs::events::main *
  **********************/
 
 void curs::events::main() {
-
-  int c;
-  MEVENT event;
-
-  while (_do_events) {
-    c = ::getch();
-    if (c == KEY_MOUSE) {
-      if (getmouse(&event) == OK) {
-        for (auto &evt: mouse_handlers)
-          evt->event(event.id, event.x, event.y, event.bstate);
-      }
-    } else if (_focused != nullptr) {
-      _focused->event(c);
-    }
-  }
+  while (_do_events) process();
 }
 
 /**********************

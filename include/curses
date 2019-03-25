@@ -22,6 +22,7 @@
 #include <iostream>
 
 #include <vector>
+#include <signal.h>
 
 #ifndef _CPPCURSES_H
 #define _CPPCURSES_H
@@ -33,27 +34,27 @@ namespace curs {
 
   class terminal {
   public:
+    static void initialize();
+
+    static void restore() noexcept;
+
     static std::string type();
 
-    terminal();
-    virtual ~terminal();
+    static void clear();
 
-    inline int clear() { return ::clear(); }
+    static void update();
 
-    inline int update() { return ::doupdate(); }
+    static void cbreak(bool value);
 
-    void cbreak(bool value);
+    static void raw(bool value);
 
-    inline int raw() { return ::raw(); }
-    inline int noraw() { return ::noraw(); }
+    static void echo(bool value);
 
-    void echo(bool value);
+    static int halfdelay(int time) { return ::halfdelay(time); }
 
-    inline int halfdelay(int time) { return ::halfdelay(time); }
+    static void cursor(bool value);
 
-    void show_cursor(bool value);
-
-    inline int getch() { return ::getch(); }
+    static int getch() { return ::getch(); }
   };
 
   /***************************************************************************
@@ -64,6 +65,7 @@ namespace curs {
   class windowbuf : public std::streambuf {
   public:
     windowbuf(WINDOW *win, bool free_window = false, size_t buffer = 2048);
+    windowbuf(const windowbuf &other) = delete;
     virtual ~windowbuf() noexcept;
 
     WINDOW *window() const { return _window; };
@@ -75,6 +77,7 @@ namespace curs {
   private:
     WINDOW *_window;
     bool _free_window;
+    bool _use_stdscr;
 
     std::vector<char> _obuf;
 
@@ -116,7 +119,7 @@ namespace curs {
     window();
     window(int x, int y, int width, int height);
     window(const window &parent, int x, int y, int width, int height);
-    window(const window &other);
+    window(const window &other) = delete;
     virtual ~window() noexcept;
 
     void cursor(int &x, int &y) const;
@@ -135,6 +138,7 @@ namespace curs {
     friend std::ostream &clrtoeol(std::ostream &os);
     friend std::ostream &touch(std::ostream &os);
     friend std::ostream &noutrefresh(std::ostream &os);
+    friend std::ostream &resize(std::ostream &os);
     friend class keypad;
     friend class nodelay;
     friend class scrollok;
@@ -328,16 +332,51 @@ namespace curs {
     }
   };
 
-  class keyboard_event_hander {
-  public:
-    keyboard_event_hander();
+  namespace events {
+    /** Process one event.
+     */
+    void process();
 
-    virtual void event(int ch) = 0;
-    virtual void lose_focus() {}
-    virtual void gain_focus() {}
+    /** Main event loop.
+     */
+    void main();
+
+    /** Shuts down the main event loop.
+     */
+    void quit();
+  }
+
+  class resize_event_handler {
+  public:
+    resize_event_handler();
+    virtual ~resize_event_handler() noexcept;
+
+  protected:
+    virtual void resize_event();
+
+  private:
+    static resize_event_handler *_handler;
+
+    sighandler_t _orig_handler;
+
+    static void _callback(int signal);
+  };
+
+  class keyboard_event_handler {
+  public:
+    keyboard_event_handler();
 
     void focus();
     bool has_focus() const;
+
+    friend void events::main();
+    friend void events::process();
+
+  protected:
+
+    virtual void key_event(int ch) = 0;
+    virtual void lose_focus() {}
+    virtual void gain_focus() {}
   };
 
   class mouse_event_handler {
@@ -345,13 +384,13 @@ namespace curs {
     mouse_event_handler();
     virtual ~mouse_event_handler() noexcept;
 
+    friend void events::main();
+    friend void events::process();
+
+  protected:
+
     virtual void event(short id, int x, int y, mmask_t buttons) = 0;
   };
-
-  namespace events {
-    void main();
-    void quit();
-  }
 }
 
 std::ostream & operator <<(std::ostream &ios, const curs::osmanip &manip);
