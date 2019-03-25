@@ -1,9 +1,9 @@
 /*                                                                  -*- c++ -*-
  * Copyright (c) 2018 Ron R Wills <ron.rwsoft@gmail.com>
  *
- * This file is part of the Curses C++ Library.
+ * This file is part of the Local Chat Suite.
  *
- * Curses C++ Library is free software: you can redistribute it and/or modify
+ * Local Chat Suite is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with the Network Streams Library.  If not, see
+ * along with the Local Chat Suite.  If not, see
  * <http://www.gnu.org/licenses/>.
  */
 
