@@ -32,17 +32,17 @@
 
 namespace sockets {
 
-	class connection;
-	class server_base;
+  class connection;
+  class server_base;
 
-	/** Socket Exceptions
-	 */
+  /** Socket Exceptions
+   */
   class exception : public std::exception {
   public:
     exception () throw();
     exception (const exception &other) throw();
     explicit exception (const char *message) throw();
-		explicit exception (const std::string &message) throw();
+    explicit exception (const std::string &message) throw();
     virtual ~exception() throw();
 
     exception& operator= (const exception&) throw();
@@ -53,35 +53,35 @@ namespace sockets {
     std::string message;
   };
 
-	class ionotready : public exception {
-	public:
-		ionotready() throw();
-		virtual ~ionotready() throw();
-	};
+  class ionotready : public exception {
+  public:
+    ionotready() throw();
+    virtual ~ionotready() throw();
+  };
 
   class timeout : public exception {
-	public:
-		timeout() throw();
-		virtual ~timeout() throw();
-	};
+  public:
+    timeout() throw();
+    virtual ~timeout() throw();
+  };
 
-	/** Socket Stream Buffer
-	 */
+  /** Socket Stream Buffer
+   */
   class socketbuf : public std::streambuf {
   public:
-		socketbuf(size_t buffer = 1024);
+    socketbuf(size_t buffer = 1024);
     virtual ~socketbuf() throw();
 
-	  socketbuf *open(const std::string &hostname, const std::string &service);
-		socketbuf *open(const std::string &filename);
+    socketbuf *open(const std::string &hostname, const std::string &service);
+    socketbuf *open(const std::string &filename);
 
-		bool is_open() const { return (sockfd > -1); }
+    bool is_open() const { return (sockfd > -1); }
 
-		void close();
+    void close();
 
     unsigned int attempts(unsigned int count) { return (_attempts = count); }
 
-		int socket() const { return sockfd; }
+    int socket() const { return sockfd; }
 
     friend class iosstream;
     friend class iostream;
@@ -105,128 +105,128 @@ namespace sockets {
     bool oflush();
   };
 
-	/** Socket Client Stream
-	 */
-	class iostream : public std::iostream {
-	public:
-		iostream(size_t buffer = 1024);
-		iostream(const std::string &hostname, const std::string &service,
+  /** Socket Client Stream
+   */
+  class iostream : public std::iostream {
+  public:
+    iostream(size_t buffer = 1024);
+    iostream(const std::string &hostname, const std::string &service,
              size_t buffer = 1024);
-		iostream(const std::string &filename, size_t buffer = 1024);
+    iostream(const std::string &filename, size_t buffer = 1024);
 
-		inline void open(const std::string &hostname, const std::string &service) {
-			sockbuf.open(hostname, service);
-		}
-		inline void open(const std::string &filename) { sockbuf.open(filename); }
+    inline void open(const std::string &hostname, const std::string &service) {
+      sockbuf.open(hostname, service);
+    }
+    inline void open(const std::string &filename) { sockbuf.open(filename); }
 
-		inline bool is_open() const { return sockbuf.is_open(); }
-		inline void close();
+    inline bool is_open() const { return sockbuf.is_open(); }
+    inline void close();
 
-		friend std::istream &nonblock(std::istream &ios);
-		friend std::istream &block(std::istream &ios);
-		friend std::ostream &keepalive(std::ostream &ios);
-		friend std::ostream &nokeepalive(std::ostream &ios);
-		friend class recvtimeout;
+    friend std::istream &nonblock(std::istream &ios);
+    friend std::istream &block(std::istream &ios);
+    friend std::ostream &keepalive(std::ostream &ios);
+    friend std::ostream &nokeepalive(std::ostream &ios);
+    friend class recvtimeout;
     friend class recvattempts;
     friend class connection;
 
-	private:
+  private:
     iostream(int sockfd, size_t buffer = 1024);
 
-		socketbuf sockbuf;
-	};
+    socketbuf sockbuf;
+  };
 
   template <class Ty>
-	class osmanip {
+  class osmanip {
   public:
-		explicit osmanip(Ty arg) : arg(arg) {}
+    explicit osmanip(Ty arg) : arg(arg) {}
 
-		virtual iostream &operator()(iostream &ios) const = 0;
+    virtual iostream &operator()(iostream &ios) const = 0;
 
-		Ty arg;
-	};
+    Ty arg;
+  };
 
-	std::istream &nonblock(std::istream &ios);
-	std::istream &block(std::istream &ios);
-	std::ostream &keepalive(std::ostream &ios);
-	std::ostream &nokeepalive(std::ostream &ios);
-	class recvtimeout : public osmanip<timeval> {
+  std::istream &nonblock(std::istream &ios);
+  std::istream &block(std::istream &ios);
+  std::ostream &keepalive(std::ostream &ios);
+  std::ostream &nokeepalive(std::ostream &ios);
+  class recvtimeout : public osmanip<timeval> {
   public:
-		virtual std::ostream &operator()(std::ostream &ios) const;
-	};
+    virtual std::ostream &operator()(std::ostream &ios) const;
+  };
   class recvattempts : public osmanip<int> {
   public:
     explicit recvattempts(int count) : osmanip<int>(count) {}
     virtual iostream &operator()(iostream &ios) const;
   };
 
-	/** Server Client Connection.
-	 */
-	class connection {
-	public:
-		connection(int sockfd);
-		virtual ~connection() throw();
+  /** Server Client Connection.
+   */
+  class connection {
+  public:
+    connection(int sockfd);
+    virtual ~connection() throw();
 
-		operator iostream &() { return ios; }
+    operator iostream &() { return ios; }
 
-		friend class server_base;
+    friend class server_base;
 
-	protected:
-		iostream ios;
+  protected:
+    iostream ios;
 
-		virtual void connect(int sockfd);
-		virtual void recv() = 0;
+    virtual void connect(int sockfd);
+    virtual void recv() = 0;
     void close();
 
   private:
-	};
+  };
 
-	/**
-	 */
+  /**
+   */
   class server_base {
   public:
 
-		typedef std::map<int, connection *>::iterator iterator;
+    typedef std::map<int, connection *>::iterator iterator;
 
     server_base();
     virtual ~server_base() throw();
 
     void open(const char *hostname, const char *service);
-		void open(const std::string &filename);
+    void open(const std::string &filename);
 
-		bool is_open() const { return (sockfd > -1); }
+    bool is_open() const { return (sockfd > -1); }
 
-		void close();
+    void close();
 
     void process_requests();
 
     void operator()();
 
-		iterator begin() { return _clients.begin(); }
-		iterator end() { return _clients.end(); }
+    iterator begin() { return _clients.begin(); }
+    iterator end() { return _clients.end(); }
 
-		/** Returns the number of connected clients.
-		 */
-		size_t connections() const { return _clients.size(); }
+    /** Returns the number of connected clients.
+     */
+    size_t connections() const { return _clients.size(); }
 
-	protected:
+  protected:
 
-		virtual connection *new_connection(int sockfd) = 0;
+    virtual connection *new_connection(int sockfd) = 0;
 
   private:
     int sockfd;
     fd_set active_fd_set;
 
-		std::map<int, connection *> _clients;
+    std::map<int, connection *> _clients;
   };
 
-	template <class Ty> class server : public server_base {
-	public:
-		server() : server_base() {}
+  template <class Ty> class server : public server_base {
+  public:
+    server() : server_base() {}
 
-	protected:
-		virtual connection *new_connection(int sockfd) { return new Ty(sockfd); }
-	};
+  protected:
+    virtual connection *new_connection(int sockfd) { return new Ty(sockfd); }
+  };
 }
 
 template <class Ty>
