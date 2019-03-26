@@ -14,7 +14,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with the Network Streams Library.  If not, see
+ * along with the Local Chat Suite.  If not, see
  * <http://www.gnu.org/licenses/>.
  */
 
@@ -26,6 +26,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cerrno>
+#include <clocale>
 #include <pwd.h>
 #include <unistd.h>
 #include <signal.h>
@@ -39,35 +40,41 @@ static int C_SYSMSG    = 5;
 static int C_PRVMSG    = 6;
 
 // Global data.
-sockets::iostream chatio;
-std::string sock_path = "/var/lib/lchat/sock";
-std::string my_name;
-curses::Terminal *terminal;
+static sockets::iostream chatio;
+static std::string sock_path = "/var/lib/lchat/sock";
+static std::string my_name;
+static unsigned int scrollback = 500;
+static bool auto_scroll = false;
 
-// Global event flags.
-bool update_user_list = false;
-int terminal_resize = 0;
+/******************************************************************************
+ */
+
+class lchat;
 
 /**
  */
-
-class Chat : public curses::Window {
+class chat : public curs::window {
 public:
-  Chat(int width, int height, int startx, int starty);
+  typedef enum {SCROLL_UP, SCROLL_DOWN, PAGE_UP, PAGE_DOWN} scroll_t;
 
-  void operator ()(curses::Window &input);
+  chat(lchat &chatw, int x, int y, int width, int height);
 
-  void update();
-  void update(int offset);
+  void scroll(scroll_t value);
 
   void scroll_buffer(unsigned int size);
-  void auto_scroll(bool on);
+  void auto_scroll(bool value = true);
+
+  void read_server();
+
+  void redraw();
 
 protected:
 
-  void print(const std::string &line);
+  void draw(const std::string &line);
 
 private:
+  lchat *_lchat;
+
   std::list<std::string> _scroll_buffer;
   unsigned int _buffer_size;
   unsigned int _buffer_location;
@@ -76,101 +83,106 @@ private:
 
 /**
  */
-
-class UserList : public curses::Window {
+class userlist : public curs::window {
 public:
-  UserList(int width, int height, int startx, int starty);
+  userlist(int x, int y, int width, int height);
 
-  void update(curses::Window &input);
+  void query_server();
+
+  void redraw();
+
+private:
+  std::list<std::string> _users;
 };
 
 /**
  */
-
-class Input : public curses::Window {
+class input : public curs::window, curs::keyboard_event_handler {
 public:
-  Input(int width, int height, int startx, int starty);
+  input(lchat &chat, int x, int y, int width, int height);
 
-  void operator ()(curses::Terminal &term, Chat &chat);
-  void update();
+  void redraw();
+
+protected:
+  void key_event(int ch);
 
 private:
+  lchat *_lchat;
+
   std::string _line;
-  bool _idle;
+  size_t _insert;
+};
+
+/**
+ */
+class lchat : protected curs::window, protected curs::resize_event_handler {
+public:
+  lchat();
+
+  typedef enum {D_UP, D_DOWN} scroll_dir_t;
+
+  void scroll_chat(scroll_dir_t dir);
+  void page_chat(scroll_dir_t dir);
+  void refresh_users();
+
+  void operator()();
+
+private:
+  void resize_event();
+
+private:
+  chat _chat;
+  input _input;
+
+  int _userlist_width;
+  bool _refresh_users;
+  userlist _userlist;
+
+  void _draw();
 };
 
 /******************************************************************************
- * class Chat
+ * class chat
  */
 
 /**************
- * Chat::Chat *
+ * chat::chat *
  **************/
 
-Chat::Chat(int width, int height, int startx, int starty)
-  : curses::Window(width, height, startx, starty), _buffer_size(500),
-    _buffer_location(0), _auto_scroll(false) {
-  scrollok(true);
-  move(height - 1, 0);
-  noutrefresh();
+chat::chat(lchat &chatw, int x, int y, int width, int height)
+  : curs::window(x, y, width, height),
+  _lchat(&chatw),
+  _buffer_size(500),
+  _buffer_location(0),
+  _auto_scroll(false) {
+  *this << curs::scrollok(true)
+        << curs::cursor(0, height - 1)
+        << std::flush;
 }
 
-/*********************
- * Chat::operator () *
- *********************/
+/****************
+ * chat::scroll *
+ ****************/
 
-void Chat::operator ()(curses::Window &input) {
-  std::string in;
-  for (;;) {
-    try {
-      getline(chatio, in);
-      if (in.empty()) return;
-
-      _scroll_buffer.push_front(in);
-      if (_scroll_buffer.size() > _buffer_size)
-        _scroll_buffer.resize(_buffer_size);
-      if (_auto_scroll)
-        _buffer_location = 0;
-
-      if (_buffer_location > 0)
-        update(1);
-      else
-        update();
-      input.noutrefresh();
-    } catch (sockets::ionotready &err) {
-      chatio.clear();
-      return;
-    }
-  }
-}
-
-/***************
-* Chat::update *
-***************/
-
-void Chat::update() {
+void chat::scroll(scroll_t value) {
   int w, h;
-  getmaxyx(h, w);
+  size(h, w);
 
-  erase();
-  move(h - 1, 0);
-
-  if (not _scroll_buffer.empty()) {
-    auto it = _scroll_buffer.rend();
-    for (int c = 0;
-         c < h + (int)_buffer_location and it != _scroll_buffer.rbegin();
-         c++, it--);
-
-    for (int c = 0; c < h and it != _scroll_buffer.rend(); c++, it++)
-      this->print(*it);
+  int offset = 0;
+  switch (value) {
+  case SCROLL_UP:
+    offset = 1;
+    break;
+  case SCROLL_DOWN:
+    offset = -1;
+    break;
+  case PAGE_UP:
+    offset = h;
+    break;
+  case PAGE_DOWN:
+    offset = -h;
+    break;
   }
-
-  noutrefresh();
-}
-
-void Chat::update(int offset) {
-  int w, h;
-  getmaxyx(h, w);
 
   if ((int)_buffer_location + offset < 0) {
     _buffer_location = 0;
@@ -180,110 +192,179 @@ void Chat::update(int offset) {
     if (_buffer_location > _scroll_buffer.size() - h)
       _buffer_location = _scroll_buffer.size() - h;
   }
-  update();
+
+  redraw();
+  curs::terminal::update();
 }
 
 /***********************
- * Chat::scroll_buffer *
+ * chat::scroll_buffer *
  ***********************/
 
-void Chat::scroll_buffer(unsigned int size) {
+void chat::scroll_buffer(unsigned int size) {
   _buffer_size = size;
   if (_buffer_size == 0)
     throw std::range_error("Invalid value for scroll buffer");
 }
 
 /*********************
- * Chat::auto_scroll *
+ * chat::auto_scroll *
  *********************/
 
-void Chat::auto_scroll(bool on) {
-  _auto_scroll = on;
+void chat::auto_scroll(bool value) {
+  _auto_scroll = value;
 }
 
-/***************
- * Chat::print *
- ***************/
+/*********************
+ * chat::read_server *
+ *********************/
 
-void Chat::print(const std::string &line) {
+void chat::read_server() {
+  std::string line;
+  for (;;) {
+    try {
+      // Attempt to read a line from the server.
+      getline(chatio, line);
+      if (line.empty()) {
+        usleep(100);
+        return; // Nothing returned so return.
+      }
+
+      // Add the new line to the scroll buffer.
+      _scroll_buffer.push_front(line);
+      if (_scroll_buffer.size() > _buffer_size)
+        _scroll_buffer.resize(_buffer_size);
+
+      // If auto scroll the reposition buffer to the new line.
+      if (_auto_scroll)
+        _buffer_location = 0;
+
+      // Update the screen.
+      if (_buffer_location > 0)
+        scroll(SCROLL_UP);
+      else
+        redraw();
+
+    } catch (sockets::ionotready &err) {
+      // Nothing to read on the socket, so return.
+      chatio.clear();
+      usleep(100);
+      return;
+    }
+  }
+}
+
+/****************
+ * chat::redraw *
+ ****************/
+
+void chat::redraw() {
+  int w, h;
+  size(w, h);
+
+  // Clear the chat window.
+  *this << curs::erase << curs::cursor(0, h - 1) << curs::cursor(false);
+
+  if (not _scroll_buffer.empty()) {
+    auto it = _scroll_buffer.rend();
+
+    // Find the starting point.
+    for (int c = 0;
+         c < h + (int)_buffer_location and it != _scroll_buffer.rbegin();
+         c++, it--);
+
+    // Draw the lines.
+    for (int c = 0; c < h and it != _scroll_buffer.rend(); c++, it++)
+      this->draw(*it);
+  }
+
+  *this << std::flush;
+}
+
+/**************
+ * chat::draw *
+ **************/
+
+void chat::draw(const std::string &line) {
   size_t pos = line.find(": ");
   if (line.compare(0, 2, "? ") == 0) {
     // Help message.
-    addch('\n');
-    attron(curses::Colors::pair(C_HLPMSG) | A_BOLD);
-    printw(line.substr(2, line.length() - 2).c_str());
-    attroff(curses::Colors::pair(C_HLPMSG) | A_BOLD);
+    *this << '\n'
+          << curs::attron(curs::palette::pair(C_HLPMSG) | A_BOLD)
+          << line.substr(2, line.length() - 2)
+          << curs::attroff(curs::palette::pair(C_HLPMSG) | A_BOLD);
 
   } else if (line.compare(0, 2, "! ") == 0) {
     // Private message.
-    addch('\n');
-    attron(curses::Colors::pair(C_USERNAME));
-    printw(line.substr(2, pos - 1).c_str());
-    attroff(curses::Colors::pair(C_USERNAME));
-
-    attron(curses::Colors::pair(C_PRVMSG) | A_BOLD);
-    printw(line.substr(pos + 1, line.length() - pos - 1).c_str());
-    attroff(curses::Colors::pair(C_PRVMSG) | A_BOLD);
+    *this << '\n'
+          << curs::attron(curs::palette::pair(C_USERNAME))
+          << line.substr(2, pos - 1)
+          << curs::attroff(curs::palette::pair(C_USERNAME))
+          << curs::attron(curs::palette::pair(C_PRVMSG) | A_BOLD)
+          << line.substr(pos + 1, line.length() - pos - 1)
+          << curs::attroff(curs::palette::pair(C_PRVMSG) | A_BOLD);
 
   } else if (line.compare(0, my_name.length() + 1, my_name + ":") == 0) {
     // A message that was sent by this user.
-    addch('\n');
-    attron(curses::Colors::pair(C_USERNAME));
-    printw(line.substr(0, pos + 1).c_str());
-    attroff(curses::Colors::pair(C_USERNAME));
-
-    attron(curses::Colors::pair(C_MYMESSAGE));
-    printw(line.substr(pos + 1, line.length() - pos).c_str());
-    attroff(curses::Colors::pair(C_MYMESSAGE));
+    *this << '\n'
+          << curs::attron(curs::palette::pair(C_USERNAME))
+          << line.substr(0, pos + 1)
+          << curs::attroff(curs::palette::pair(C_USERNAME))
+          << curs::attron(curs::palette::pair(C_MYMESSAGE))
+          << line.substr(pos + 1, line.length() - pos)
+          << curs::attroff(curs::palette::pair(C_MYMESSAGE));
 
   } else if (pos != line.npos) {
     // Color the senders name.
-    addch('\n');
-    attron(curses::Colors::pair(C_USERNAME));
-    printw(line.substr(0, pos + 1).c_str());
-    attroff(curses::Colors::pair(C_USERNAME));
-
-    printw(line.substr(pos + 1, line.length() - pos).c_str());
+    *this << '\n'
+          << curs::attron(curs::palette::pair(C_USERNAME))
+          << line.substr(0, pos + 1)
+          << curs::attroff(curs::palette::pair(C_USERNAME))
+          << line.substr(pos + 1, line.length() - pos);
 
   } else {
-    addch('\n');
-    attron(curses::Colors::pair(C_SYSMSG));
-    printw(line.c_str());
-    attroff(curses::Colors::pair(C_SYSMSG));
+    // System message.
+    *this << '\n'
+          << curs::attron(curs::palette::pair(C_SYSMSG))
+          << line
+          << curs::attroff(curs::palette::pair(C_SYSMSG));
 
     // User join message.
     if (line.length() > 21) {
-      if (line.compare(line.length() - 21, 21, " has joined the chat.") == 0)
-        update_user_list = true;
+      if (line.compare(line.length() - 21, 21, " has joined the chat.") == 0) {
+        _lchat->refresh_users();
+      }
     }
 
     // User left message.
     if (line.length() > 19) {
-      if (line.compare(line.length() - 19, 19, " has left the chat.") == 0)
-        update_user_list = true;
+      if (line.compare(line.length() - 19, 19, " has left the chat.") == 0) {
+        _lchat->refresh_users();
+      }
     }
   }
 }
 
 /******************************************************************************
- * class UserList
+ * class userlist
  */
 
 /**********************
- * UserList::UserList *
+ * userlist::userlist *
  **********************/
 
-UserList::UserList(int width, int height, int startx, int starty)
- : curses::Window(width, height, startx, starty) {
+userlist::userlist(int x, int y, int width, int height)
+  : curs::window(x, y, width, height) {
 }
 
-/********************
- * UserList::update *
- ********************/
+/**************************
+ * userlist::query_server *
+ **************************/
 
-void UserList::update(curses::Window &input) {
+void userlist::query_server() {
   std::string users;
 
+  // Query the server.
   chatio << "/who" << std::endl;
   for (;;) {
     try {
@@ -295,153 +376,268 @@ void UserList::update(curses::Window &input) {
     }
   }
 
-  erase();
-  move(0, 0);
-  size_t pos;
-  while ((pos = users.find(" ")) != users.npos)
-    users[pos] = '\n';
-  printw(users.c_str());
+  // Clear the old user list.
+  _users.clear();
 
-  noutrefresh();
-  input.noutrefresh();
-  update_user_list = false;
+  // Repopulate the user list with the servers response.
+  size_t last = 0, pos;
+  while ((pos = users.find(" ", last)) != users.npos) {
+    _users.push_back(users.substr(last, pos));
+    last = pos += 1;
+  }
+
+  // Redraw the list.
+  redraw();
+}
+
+/********************
+ * userlist::redraw *
+ ********************/
+
+void userlist::redraw() {
+  // Reset the window.
+  *this << curs::erase << curs::cursor(0, 0) << curs::cursor(false);
+
+  // Write the user list.
+  for (auto &user: _users) {
+    *this << user << "\n";
+  }
+
+  // Flush it to the screen.
+  *this << std::flush;
 }
 
 /******************************************************************************
- * class Input
+ * class input
  */
 
  /****************
   * Input::Input *
   ****************/
 
-Input::Input(int width, int height, int startx, int starty)
-  : curses::Window(width, height, startx, starty) {
-  update();
-}
-
-/**********************
- * Input::operator () *
- **********************/
-
-void Input::operator ()(curses::Terminal &term, Chat &chat) {
-  for (;;) {
-    int ch = term.getch();
-    switch (ch) {
-    case ERR: // Keyboard input timeout
-      return;
-    case '\n':
-      chatio << _line << std::endl;
-      _line = "";
-      update();
-      usleep(100);
-      return;
-    case KEY_BACKSPACE:
-      if (not _line.empty()) {
-        _line.resize(_line.length() - 1);
-        update();
-      }
-      break;
-    case KEY_UP:
-      chat.update(1);
-      update();
-      break;
-    case KEY_DOWN:
-      chat.update(-1);
-      update();
-      break;
-    case KEY_PPAGE: { // Page up key
-      int w, h;
-      chat.getmaxyx(h, w);
-      chat.update(h);
-      update();
-      break;
-    }
-    case KEY_NPAGE: { // Page down key
-      int w, h;
-      chat.getmaxyx(h, w);
-      chat.update(-h);
-      update();
-      break;
-    }
-    default:
-      if (isprint(ch)) {
-        _line += ch;
-        update();
-      }
-      break;
-    }
-  }
+input::input(lchat &chat, int x, int y, int width, int height)
+  : curs::window(x, y, width, height), _lchat(&chat), _line(), _insert(0) {
+  *this << curs::leaveok(false);
 }
 
 /*****************
- * Input::update *
+ * input::redraw *
  *****************/
 
-void Input::update() {
-  erase();
-  printw(0, 0, "> %s", _line.c_str());
-  noutrefresh();
-  terminal->doupdate();
+void input::redraw() {
+  *this << curs::erase
+        << curs::cursor(0, 0) << "> " << _line
+        << curs::cursor(_insert + 2, 0) << curs::cursor(true);
+}
+
+/********************
+ * Input::key_event *
+ ********************/
+
+void input::key_event(int ch) {
+  redraw();
+  curs::terminal::update();
+
+  switch (ch) {
+  case ERR: // Keyboard input timeout
+    usleep(100);
+    return;
+
+  case '\n': // Send the line to the server and reset the input.
+    chatio << _line << std::endl;
+    _line = "";
+    _insert = 0;
+    redraw();
+    usleep(100);
+    return;
+
+  case KEY_BACKSPACE:
+    if (not _line.empty() and _insert > 0) {
+      _line.erase(_insert - 1, 1);
+      _insert--;
+    }
+    break;
+
+  case KEY_UP:
+    _lchat->scroll_chat(lchat::D_UP);
+    break;
+
+  case KEY_DOWN:
+    _lchat->scroll_chat(lchat::D_DOWN);
+    break;
+
+  case KEY_LEFT:
+    if (_insert > 0) _insert--;
+    break;
+
+  case KEY_RIGHT:
+    if (_insert < _line.size()) _insert++;
+    break;
+
+  case KEY_PPAGE: // Page up key
+    _lchat->page_chat(lchat::D_UP);
+    break;
+
+  case KEY_NPAGE: // Page down key
+    _lchat->page_chat(lchat::D_DOWN);
+    break;
+
+  case KEY_HOME:
+    _insert = 0;
+    break;
+
+  case KEY_END:
+    _insert = _line.size();
+    break;
+
+  default:
+    if (isprint(ch)) {
+      std::string in;
+      in += ch; // This is sillyness, but it's what C++ wants.
+
+      _line.insert(_insert, in);
+      _insert++;
+    }
+    break;
+  }
+  redraw();
 }
 
 /******************************************************************************
+ * class lchat
  */
 
-Chat *chat_window;
-UserList *users_window;
-Input *input_window;
+/****************
+ * lchat::lchat *
+ ****************/
 
-/******************
- * signal_handler *
- ******************/
+lchat::lchat()
+  : curs::window(),
+  _chat(*this, 0, 1, width()  - (12), height() - 3),
+  _input(*this, 0, height() - 1, width(), 1),
+  _userlist_width(11),
+  _refresh_users(true),
+  _userlist(width() - 11, 1, 11, height() - 3) {
 
-static void signal_handler(int signal) {
-  if (signal == SIGWINCH) terminal_resize++;
+  // Enable keypad translation.
+  *this << curs::keypad(true);
+
+  // Configure the color theme.
+  curs::palette::start();
+  if (curs::palette::has_colors()) {
+    curs::palette::pair(C_TITLE, curs::palette::WHITE,
+                        curs::palette::BLUE);
+    curs::palette::pair(C_USERNAME, curs::palette::CYAN, -1);
+    curs::palette::pair(C_MYMESSAGE, curs::palette::GREEN, -1);
+    curs::palette::pair(C_HLPMSG, curs::palette::CYAN, -1);
+    curs::palette::pair(C_SYSMSG, curs::palette::BLUE, -1);
+    curs::palette::pair(C_PRVMSG, curs::palette::YELLOW, -1);
+  }
+
+  _draw();
 }
 
-/*************
- * resize_ui *
- *************/
+/**********************
+ * lchat::scroll_chat *
+ **********************/
 
-static void resize_ui() {
-  // Update curses with the new terminal size information.
-  endwin();
-  refresh();
+void lchat::scroll_chat(scroll_dir_t dir) {
+  switch(dir) {
+  case D_UP:
+    _chat.scroll(chat::SCROLL_UP);
+    break;
+  case D_DOWN:
+    _chat.scroll(chat::SCROLL_DOWN);
+    break;
+  }
+}
 
+/********************
+ * lchat::page_chat *
+ ********************/
+
+void lchat::page_chat(scroll_dir_t dir) {
+  switch(dir) {
+  case D_UP:
+    _chat.scroll(chat::PAGE_UP);
+    break;
+  case D_DOWN:
+    _chat.scroll(chat::PAGE_DOWN);
+    break;
+  }
+}
+
+/*************************
+ *  lchat::refresh_users *
+ *************************/
+
+void lchat::refresh_users() {
+  _refresh_users = true;
+}
+
+/***********************
+ *  lchat::operator () *
+ ***********************/
+
+void lchat::operator()() {
+  // Our main application loop.
+  while (chatio) {
+    _chat.read_server();
+
+    curs::events::process();
+
+    if (chatio and _refresh_users) {
+      _userlist.query_server();
+      _refresh_users = false;
+    }
+
+    curs::terminal::update();
+  }
+}
+
+/************************
+ *  lchat::resize_event *
+ ************************/
+
+void lchat::resize_event() {
+  // Redraw ourself.
+  _draw();
+
+  // Get the new window size.
   int w, h;
-  curses::Window terminal_window;
-  terminal_window.getmaxyx(h, w);
-  terminal_window.erase();
+  size(w, h);
 
-  // Update the terminal window
-  terminal_window.attron(curses::Colors::pair(C_TITLE) | A_BOLD);
-  terminal_window.addch(0, 0, std::string(w, ' '));
+  // Resize and refresh all the other windows.
+  _chat << curs::move(0, 1)
+        << curs::resize(w - (_userlist_width + 1), h - 3);
+  _chat.redraw();
+  _input << curs::move(0, h - 1)
+         << curs::resize(w, 1);
+  _input.redraw();
+  _userlist << curs::move(w - _userlist_width, 1)
+            << curs::resize(_userlist_width, h - 3);
+  _userlist.redraw();
+}
+
+/****************
+ * lchat::_draw *
+ ****************/
+
+void lchat::_draw() {
+  int w, h;
+  size(w, h);
+
+  // Draw the frames around our windows.
+  *this << curs::attron(curs::palette::pair(C_TITLE) | A_BOLD)
+        << curs::cursor(0, 0) << "📡" << std::string(w - 1, ' ');
   std::string title("Local Chat v" VERSION);
-  terminal_window.printw(0, (w - title.length()) / 2, title.c_str());
-  terminal_window.attroff(curses::Colors::pair(C_TITLE) | A_BOLD);
-  terminal_window.hline(h - 2, 0, ACS_HLINE, w);
-  terminal_window.vline(1, w - 11, ACS_VLINE, h - 3);
-  terminal_window.noutrefresh();
-
-  // Resize the chat window.
-  chat_window->mvwin(1, 0);
-  chat_window->resize(h - 3, w - 12);
-  chat_window->update();
-
-  // Resize the user list window.
-  //users_window->erase();
-  users_window->mvwin(1, w - 10);
-  users_window->resize(h - 3, 10);
-  users_window->noutrefresh();
-
-  // Resize the input window.
-  input_window->mvwin(h - 1, 0);
-  input_window->resize(1, w);
-  input_window->update();
-
-  update_user_list = true;
-  terminal_resize--;
+  *this << curs::cursor((w - title.size()) / 2, 0) << title
+        << curs::attroff(curs::palette::pair(C_TITLE) | A_BOLD)
+        << curs::cursor(0, h - 2)
+        << curs::hline(w, ACS_HLINE)
+        << curs::cursor(w - (_userlist_width + 1), 1)
+        << curs::vline(h - 3, ACS_VLINE)
+        << std::flush;
 }
 
 /******************************************************************************
@@ -449,12 +645,10 @@ static void resize_ui() {
  */
 
 int main(int argc, char *argv[]) {
+  std::setlocale(LC_ALL, "");
 
-  // Parse the command line options.
+  // Get the command line arguments.
   int opt;
-  unsigned int scrollback = 500;
-  bool auto_scroll = false;
-
   while ((opt = getopt(argc, argv, "as:l:")) != -1) {
     switch (opt) {
     case 'a':
@@ -498,67 +692,21 @@ int main(int argc, char *argv[]) {
   }
 
   // Setup the terminal.
-  curses::Terminal term;
-  terminal = &term;
-  curses::Colors::start();
-  term.cbreak();
-  term.noecho();
-  term.halfdelay(10);
+  curs::terminal::initialize();
+  curs::terminal::cbreak(true);
+  curs::terminal::echo(false);
+  curs::terminal::halfdelay(1);
 
-  // The color theme.
-  if (curses::Colors::has_colors()) {
-    curses::Colors::pair(C_TITLE, curses::Colors::WHITE,
-                         curses::Colors::BLUE);
-    curses::Colors::pair(C_USERNAME, curses::Colors::CYAN,
-                         curses::Colors::BLACK);
-    curses::Colors::pair(C_MYMESSAGE, curses::Colors::GREEN,
-                         curses::Colors::BLACK);
-    curses::Colors::pair(C_HLPMSG, curses::Colors::CYAN,
-                         curses::Colors::BLACK);
-    curses::Colors::pair(C_SYSMSG, curses::Colors::BLUE,
-                         curses::Colors::BLACK);
-    curses::Colors::pair(C_PRVMSG, curses::Colors::YELLOW,
-                         curses::Colors::BLACK);
+  try {
+    lchat chat_ui;
+    chat_ui();
+  } catch (std::exception &err) {
+    curs::terminal::restore();
+    std::cerr << err.what() << std::endl;
+    return EXIT_FAILURE;
   }
 
-  // Setup the user interface.
-  int w, h;
-  curses::Window term_win;
-  term_win.keypad(true);
-  term_win.getmaxyx(h, w);
-
-  term_win.attron(curses::Colors::pair(C_TITLE) | A_BOLD);
-  term_win.addch(0, 0, std::string(w, ' '));
-  std::string title("Local Chat v" VERSION);
-  term_win.printw(0, (w - title.length()) / 2, title.c_str());
-  term_win.attroff(curses::Colors::pair(C_TITLE) | A_BOLD);
-  term_win.hline(h - 2, 0, ACS_HLINE, w);
-  term_win.vline(1, w - 11, ACS_VLINE, h - 3);
-  term_win.noutrefresh();
-
-  Chat chat(w - 12, h - 3, 0, 1);
-  chat.scroll_buffer(scrollback);
-  chat.auto_scroll(auto_scroll);
-
-  UserList users(10, h - 3, w - 10, 1);
-
-  Input input(w, 1, 0, h - 1);
-  term.doupdate();
-
-  // Setup for terminal resizing events.
-  chat_window = &chat;
-  users_window = &users;
-  input_window = &input;
-  signal(SIGWINCH, signal_handler);
-
-  // The main loop.
-  while(chatio) {
-    input(term, chat);
-    chat(input);
-    if (update_user_list) users.update(input);
-    if (terminal_resize) resize_ui();
-    term.doupdate();
-  }
-
+  // Restore the terminal.
+  curs::terminal::restore();
   return EXIT_SUCCESS;
 }

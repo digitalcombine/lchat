@@ -44,7 +44,7 @@ static bool running = true;
 
 class ChatClient : public sockets::connection {
 public:
-	ChatClient(int sockfd) : sockets::connection(sockfd) {}
+  ChatClient(int sockfd) : sockets::connection(sockfd) {}
   virtual ~ChatClient() throw() {}
 
   std::string name() const { return _name; }
@@ -52,8 +52,8 @@ public:
 protected:
   std::string _name;
 
-	virtual void connect(int sockfd);
-	virtual void recv();
+  virtual void connect(int sockfd);
+  virtual void recv();
 
 private:
   bool is_private(const std::string &mesg);

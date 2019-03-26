@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([lchat], [1.2.2], [ron.rwsoft@gmail.com])
+AC_INIT([lchat], [1.3.0], [ron@digitalcombine.ca])
 AM_INIT_AUTOMAKE
 AM_SILENT_RULES
 AC_CONFIG_SRCDIR([src/curses.cpp])
@@ -32,6 +32,13 @@ AC_ARG_ENABLE([debug],
        esac], [debug=false])
 AM_CONDITIONAL([DEBUG], [test x$debug = xtrue])
 
+AC_ARG_WITH([systemd],
+  [AS_HELP_STRING([--with-systemd],
+    [Support systemd service for the local chat server])],
+  [with_systemd=true],
+  [])
+AM_CONDITIONAL([SYSTEMD], [test x$with_systemd = xtrue])
+
 AC_PROG_MKDIR_P
 
 # Checks for programs.
@@ -42,7 +49,7 @@ AC_PROG_CXX
 
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h netinet/in.h sys/socket.h unistd.h])
-AC_CHECK_HEADERS([ncurses.h], [],
+AC_CHECK_HEADERS([ncursesw/curses.h], [],
   [AC_CHECK_HEADERS([curses.h], [],
      [AC_MSG_ERROR([Curses library headers not found])])])
 
@@ -61,5 +68,6 @@ AX_CHECK_COMPILE_FLAG([-std=c++11],
 AC_CONFIG_FILES([Makefile
                  include/Makefile
                  src/Makefile
-                 man/Makefile])
+                 man/Makefile
+                 extra/Makefile])
 AC_OUTPUT

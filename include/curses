@@ -1,9 +1,9 @@
 /*                                                                  -*- c++ -*-
- * Copyright (c) 2018 Ron R Wills <ron.rwsoft@gmail.com>
+ * Copyright © 2019 Ron R Wills <ron@digitalcombine.ca>
  *
- * This file is part of the Curses C++ Library.
+ * This file is part of the Local Chat Suite.
  *
- * Curses C++ Library is free software: you can redistribute it and/or modify
+ * Local Chat is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
@@ -14,248 +14,394 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with the Network Streams Library.  If not, see
+ * along with the Local Chat Suite.  If not, see
  * <http://www.gnu.org/licenses/>.
  */
 
-#ifdef HAVE_NCURSES_H
-#include <ncurses.h>
-#else
-#ifdef HAVE_CURSES_H
-#include <curses.h>
-#else
-#error Curses header not found
-#endif
-#endif
+#include <_p_curses>
 #include <iostream>
 
-// Turn the curses library macros into inline functions.
-
-#ifdef addch
-inline int (addch)(const chtype ch) { return addch(ch); }
-#undef addch
-#endif
-
-#ifdef attron
-inline int (attron)(int attr) { return attron(attr); }
-#undef attron
-#endif
-
-#ifdef attroff
-inline int (attroff)(int attr) { return attroff(attr); }
-#undef attroff
-#endif
-
-#ifdef attrset
-inline int (attrset)(int attr) { return attrset(attr); }
-#undef attrset
-#endif
-
-#ifdef clrtoeol
-inline int (clrtoeol)() { return clrtoeol(); }
-#undef clrtoeol
-#endif
-
-#ifdef getch
-inline int (getch)() { return getch(); }
-#undef getch
-#endif
-
-#ifdef getyx
-inline void (getyx)(WINDOW *win, int &y, int &x) { getyx(win, y, x); }
-#undef getyx
-#endif
-
-#ifdef getmaxyx
-inline void (getmaxyx)(WINDOW *win, int &y, int &x) { getmaxyx(win, y, x); }
-#undef getmaxyx
-#endif
-
-
-#ifdef hline
-inline int (hline)(chtype ch, int n) { return hline(ch, n); }
-#undef hline
-#endif
-
-#ifdef vline
-inline int (vline)(chtype ch, int n) { return vline(ch, n); }
-#undef vline
-#endif
-
-#ifdef mvwaddstr
-inline int (mvwaddstr)(WINDOW *win, int y, int x, const char *str) {
-  return mvwaddstr(win, y, x, str);
-}
-#undef mvwaddstr
-#endif
-
-#ifdef waddch
-inline int (waddch)(WINDOW *win, const chtype ch) { return waddch(win, ch); }
-#undef waddch
-#endif
-
-#ifdef wattrset
-inline int (wattrset)(WINDOW *win, int attr) { return wattrset(win, attr); }
-#undef wattrset
-#endif
-
-#ifdef wclrtoeol
-inline int (wclrtoeol)(WINDOW *win) { return wclrtoeol(win); }
-#undef wclrtoeol
-#endif
-
-#ifdef whline
-inline int (whline)(WINDOW *win, chtype ch, int n) {
-  return whline(win, ch, n);
-}
-#undef whline
-#endif
-
-#ifdef wvline
-inline int (wvline)(WINDOW *win, chtype ch, int n) {
-  return wvline(win, ch, n);
-}
-#undef wvline
-#endif
-
-#ifdef mvwhline
-inline int (mvwhline)(WINDOW *win, int y, int x, chtype ch, int n) {
-  return mvwhline(win, y, x, ch, n);
-}
-#undef mvwhline
-#endif
-
-#ifdef mvwvline
-inline int (mvwvline)(WINDOW *win, int y, int x, chtype ch, int n) {
-  return mvwvline(win, y, x, ch, n);
-}
-#undef mvwvline
-#endif
+#include <vector>
+#include <signal.h>
 
 #ifndef _CPPCURSES_H
 #define _CPPCURSES_H
 
-namespace curses {
+namespace curs {
 
-  class Terminal {
+  /***************************************************************************
+   */
+
+  class terminal {
   public:
-		static inline const char *type() { return ttytype; }
+    static void initialize();
 
-    Terminal() { ::initscr(); }
-    ~Terminal() { ::endwin(); }
+    static void restore() noexcept;
 
-    inline int clear() { return ::clear(); }
+    static std::string type();
 
-    inline int doupdate() { return ::doupdate(); }
+    static void clear();
 
-    inline int erase() { return ::erase(); }
+    static void update();
 
-    inline int refresh() { return ::refresh(); }
+    static void cbreak(bool value);
 
-    inline int cbreak() { return ::cbreak(); }
-    inline int nocbreak() { return ::nocbreak(); }
+    static void raw(bool value);
 
-    inline int raw() { return ::raw(); }
-    inline int noraw() { return ::noraw(); }
+    static void echo(bool value);
 
-    inline int echo() { return ::echo(); }
-    inline int noecho() { return ::noecho(); }
+    static int halfdelay(int time) { return ::halfdelay(time); }
 
-		inline int halfdelay(int time) { return ::halfdelay(time); }
+    static void cursor(bool value);
 
-    inline int getch() { return ::getch(); }
+    static int getch() { return ::getch(); }
   };
 
-  class Window {
+  /***************************************************************************
+   * Curses Window Stream Buffer
+   *  This create a stream buffer that writes to a curses window.
+   */
+
+  class windowbuf : public std::streambuf {
   public:
-		Window() : _win(::stdscr) {}
-    Window(int width, int height, int startx, int starty) {
-      _win = ::newwin(height, width, starty, startx);
-    }
-    ~Window() throw() { if (_win != ::stdscr) ::delwin(_win); }
+    windowbuf(WINDOW *win, bool free_window = false, size_t buffer = 2048);
+    windowbuf(const windowbuf &other) = delete;
+    virtual ~windowbuf() noexcept;
 
-		inline int keypad(bool use) { return ::keypad(_win, use); }
+    WINDOW *window() const { return _window; };
 
-    inline int nodelay(bool bf) { return ::nodelay(_win, bf); }
-
-    inline int scrollok(bool bf) { return ::scrollok(_win, bf); }
-
-    inline int erase() { return ::werase(_win); }
-    inline int clear() { return ::wclear(_win); }
-    inline int clrtoeol() { return ::wclrtoeol(_win); }
-
-    inline int noutrefresh() { return wnoutrefresh(_win); }
-    inline int refresh() { return wrefresh(_win); }
-
-		inline int attron(int attrs) { return ::wattron(_win, attrs); }
-		inline int attroff(int attrs) { return ::wattroff(_win, attrs); }
-		inline int attrset(int attrs) { return ::wattrset(_win, attrs); }
-
-    inline int getch() { return ::wgetch(_win); }
-
-    inline int addch(chtype ch) { return ::waddch(_win, ch); }
-    inline int addch(const std::string &value) {
-      return ::waddstr(_win, value.c_str());
-    }
-    inline int addch(int y, int x, const std::string &value) {
-      return ::mvwaddstr(_win, y, x, value.c_str());
-    }
-
-    inline int hline(chtype ch, int n) { return ::whline(_win, ch, n); }
-    inline int hline(int y, int x, chtype ch, int n) {
-      return ::mvwhline(_win, y, x, ch, n);
-    }
-    inline int vline(int y, int x, chtype ch, int n) {
-      return ::mvwvline(_win, y, x, ch, n);
-    }
-
-		int printw(const char *mesg, ...);
-		int printw(int y, int x, const char *mesg, ...);
-
-		inline void getyx(int &y, int &x) { ::getyx(_win, y, x); }
-    inline int move(int y, int x) { return ::wmove(_win, y, x); }
-
-    inline int resize(int y, int x) { return ::wresize(_win, y, x); }
-    inline int mvwin(int y, int x) { return ::mvwin(_win, y, x); }
-
-    inline void getmaxyx(int &y, int &x) { ::getmaxyx(_win, y, x); }
+  protected:
+    virtual int_type overflow(int_type ch);
+    virtual int sync();
 
   private:
-    WINDOW *_win;
+    WINDOW *_window;
+    bool _free_window;
+    bool _use_stdscr;
 
-    Window(WINDOW *win) : _win(win) {};
+    std::vector<char> _obuf;
+
+    bool oflush();
   };
 
-	class Colors {
-	public:
-		static const unsigned int BLACK   = COLOR_BLACK;
-		static const unsigned int RED     = COLOR_RED;
-		static const unsigned int GREEN   = COLOR_GREEN;
-		static const unsigned int YELLOW  = COLOR_YELLOW;
-		static const unsigned int BLUE    = COLOR_BLUE;
-		static const unsigned int MAGENTA = COLOR_MAGENTA;
-		static const unsigned int CYAN    = COLOR_CYAN;
-		static const unsigned int WHITE   = COLOR_WHITE;
+  /***************************************************************************
+   * Curses Pad Stream Buffer
+   *  This create a stream buffer that writes to a curses window.
+   */
 
-		static inline bool has_colors() { return (::has_colors() == TRUE); }
-		static inline bool can_change_color() {
-			return (::can_change_color() == TRUE);
-		}
-		static inline int start() { return start_color(); }
+  class padbuf : public std::streambuf {
+  public:
+    padbuf(int width, int height, size_t buffer = 2048);
+    virtual ~padbuf() noexcept;
 
-		static inline int colors() { return COLORS; }
-		static inline int pairs() { return COLOR_PAIRS; }
+    WINDOW *window() const { return _pad; };
 
-		static inline int pair(int index, int fg, int bg) {
-			return init_pair(index, fg, bg);
-		}
-		static inline int pair(int index) { return COLOR_PAIR(index); }
+  protected:
+    virtual int_type overflow(int_type ch);
+    virtual int sync();
 
-		static inline int color(int index, int r, int g, int b) {
-			return init_color(index, r, g, b);
-		}
+  private:
+    WINDOW *_pad;
 
-	};
+    int x, y;
+    int dest_x, dest_y, dest_width, dest_height;
+
+    std::vector<char> _obuf;
+
+    bool oflush();
+  };
+
+  /***************************************************************************
+   */
+
+  class window : public std::ostream {
+  public:
+    window();
+    window(int x, int y, int width, int height);
+    window(const window &parent, int x, int y, int width, int height);
+    window(const window &other) = delete;
+    virtual ~window() noexcept;
+
+    void cursor(int &x, int &y) const;
+    void size(int &width, int &height) const;
+    void position(int &x, int &y) const;
+    int width() const;
+    int height() const;
+    int x() const;
+    int y() const;
+
+    operator WINDOW *() const { return _windowbuf.window(); }
+
+    friend std::ostream &clear(std::ostream &os);
+    friend std::ostream &erase(std::ostream &os);
+    friend std::ostream &clrtobot(std::ostream &os);
+    friend std::ostream &clrtoeol(std::ostream &os);
+    friend std::ostream &touch(std::ostream &os);
+    friend std::ostream &noutrefresh(std::ostream &os);
+    friend std::ostream &resize(std::ostream &os);
+    friend class keypad;
+    friend class nodelay;
+    friend class scrollok;
+    friend class leaveok;
+    friend class attron;
+    friend class attroff;
+    friend class attrset;
+    friend class bkgd;
+    friend class cursor;
+    friend class hline;
+    friend class vline;
+    friend class box;
+    friend class border;
+    friend class resize;
+    friend class move;
+
+  private:
+    window *_parent;
+    windowbuf _windowbuf;
+  };
+
+  /***************************************************************************
+   * Window IO Manipulators
+   */
+
+  class osmanip {
+  public:
+    virtual std::ostream &operator()(std::ostream &os) const = 0;
+  };
+
+  std::ostream &clear(std::ostream &os);
+  std::ostream &erase(std::ostream &os);
+  std::ostream &clrtobot(std::ostream &os);
+  std::ostream &clrtoeol(std::ostream &os);
+  std::ostream &touch(std::ostream &os);
+  std::ostream &noutrefresh(std::ostream &os);
+
+  class keypad : public osmanip {
+  public:
+    explicit keypad(bool use) : _use(use) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+  private:
+    bool _use;
+  };
+
+  class nodelay : public osmanip {
+  public:
+    explicit nodelay(bool value) : _value(value) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+  private:
+    bool _value;
+  };
+
+  class scrollok : public osmanip {
+  public:
+    explicit scrollok(bool value) : _value(value) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+  private:
+    bool _value;
+  };
+
+  class leaveok : public osmanip {
+  public:
+    explicit leaveok(bool value) : _value(value) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+  private:
+    bool _value;
+  };
+
+  class attron : public osmanip {
+  public:
+    explicit attron(int attr) : _attr(attr) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+  private:
+    int _attr;
+  };
+
+  class attroff : public osmanip {
+  public:
+    explicit attroff(int attr) : _attr(attr) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+  private:
+    int _attr;
+  };
+
+  class attrset : public osmanip {
+  public:
+    explicit attrset(int attr) : _attr(attr) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+  private:
+    int _attr;
+  };
+
+  class bkgd : public osmanip {
+  public:
+    explicit bkgd(wchar_t ch) : _attr(0), _character(ch) {}
+    explicit bkgd(wchar_t ch, attr_t attr) : _attr(attr), _character(ch) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+  private:
+    attr_t  _attr;
+    wchar_t _character;
+  };
+
+  class cursor : public osmanip {
+  public:
+    explicit cursor(int x, int y) : _op(POSITION), _x(x), _y(y) {}
+    explicit cursor(bool show) : _op(VISIBLITY), _show(show) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+  private:
+    enum {POSITION, VISIBLITY} _op;
+    int _x, _y;
+    bool _show;
+  };
+
+  class hline : public osmanip {
+  public:
+    explicit hline(int length, chtype character = 0)
+      : _character(character), _length(length) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+  private:
+    chtype _character;
+    int _length;
+  };
+
+  class vline : public osmanip {
+  public:
+    explicit vline(int length, chtype character = 0)
+      : _character(character), _length(length) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+  private:
+    chtype _character;
+    int _length;
+  };
+
+  class box : public osmanip {
+  public:
+    explicit box(chtype horch = 0, chtype verch = 0)
+      : _horch(horch), _verch(verch) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+  private:
+    chtype _horch, _verch;
+  };
+
+  class border : public osmanip {
+  public:
+    explicit border(chtype ls = 0, chtype rs = 0, chtype ts = 0, chtype bs = 0,
+                    chtype tl = 0, chtype tr = 0, chtype bl = 0, chtype br = 0)
+      : _ls(ls), _rs(rs), _ts(ts), _bs(bs), _tl(tl), _tr(tr), _bl(bl),
+        _br(br) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+  private:
+    chtype _ls, _rs, _ts, _bs, _tl, _tr, _bl, _br;
+  };
+
+  class resize : public osmanip {
+  public:
+    explicit resize(int width, int height)
+      : _width(width), _height(height) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+  private:
+    int _width, _height;
+  };
+
+  class move : public osmanip {
+  public:
+    explicit move(int x, int y) : _x(x), _y(y) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+  private:
+    int _x, _y;
+  };
+
+  /***************************************************************************
+   */
+
+  class palette {
+  public:
+    static const unsigned int BLACK   = COLOR_BLACK;
+    static const unsigned int RED     = COLOR_RED;
+    static const unsigned int GREEN   = COLOR_GREEN;
+    static const unsigned int YELLOW  = COLOR_YELLOW;
+    static const unsigned int BLUE    = COLOR_BLUE;
+    static const unsigned int MAGENTA = COLOR_MAGENTA;
+    static const unsigned int CYAN    = COLOR_CYAN;
+    static const unsigned int WHITE   = COLOR_WHITE;
+
+    static bool has_colors();
+    static bool can_change_color();
+    static inline int start() { return start_color(); }
+
+    static inline int colors() { return COLORS; }
+    static inline int pairs() { return COLOR_PAIRS; }
+
+    static inline int pair(int index, int fg, int bg) {
+      return init_pair(index, fg, bg);
+    }
+    static inline int pair(int index) { return COLOR_PAIR(index); }
+
+    static inline int color(int index, int r, int g, int b) {
+      return init_color(index, r, g, b);
+    }
+  };
+
+  namespace events {
+    /** Process one event.
+     */
+    void process();
+
+    /** Main event loop.
+     */
+    void main();
+
+    /** Shuts down the main event loop.
+     */
+    void quit();
+  }
+
+  class resize_event_handler {
+  public:
+    resize_event_handler();
+    virtual ~resize_event_handler() noexcept;
+
+  protected:
+    virtual void resize_event();
+
+  private:
+    static resize_event_handler *_handler;
+
+    sighandler_t _orig_handler;
+
+    static void _callback(int signal);
+  };
+
+  class keyboard_event_handler {
+  public:
+    keyboard_event_handler();
+
+    void focus();
+    bool has_focus() const;
+
+    friend void events::main();
+    friend void events::process();
+
+  protected:
+
+    virtual void key_event(int ch) = 0;
+    virtual void lose_focus() {}
+    virtual void gain_focus() {}
+  };
+
+  class mouse_event_handler {
+  public:
+    mouse_event_handler();
+    virtual ~mouse_event_handler() noexcept;
+
+    friend void events::main();
+    friend void events::process();
+
+  protected:
+
+    virtual void event(short id, int x, int y, mmask_t buttons) = 0;
+  };
 }
+
+std::ostream & operator <<(std::ostream &ios, const curs::osmanip &manip);
 
 #endif /* _CPPCURSES_H */

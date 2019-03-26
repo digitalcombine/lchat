@@ -1,0 +1,8 @@
+[Unit]
+Description=Local Chat dispatcher server
+
+[Service]
+ExecStart=@sbindir@/lchatd
+
+[Install]
+WantedBy=multi-user.target
