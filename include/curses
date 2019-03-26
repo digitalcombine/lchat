@@ -142,6 +142,7 @@ namespace curs {
     friend class keypad;
     friend class nodelay;
     friend class scrollok;
+    friend class leaveok;
     friend class attron;
     friend class attroff;
     friend class attrset;
@@ -194,6 +195,14 @@ namespace curs {
   class scrollok : public osmanip {
   public:
     explicit scrollok(bool value) : _value(value) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+  private:
+    bool _value;
+  };
+
+  class leaveok : public osmanip {
+  public:
+    explicit leaveok(bool value) : _value(value) {}
     virtual std::ostream &operator()(std::ostream &os) const;
   private:
     bool _value;

@@ -110,7 +110,7 @@ private:
   lchat *_lchat;
 
   std::string _line;
-  bool _idle;
+  size_t _insert;
 };
 
 /**
@@ -416,7 +416,8 @@ void userlist::redraw() {
   ****************/
 
 input::input(lchat &chat, int x, int y, int width, int height)
-  : curs::window(x, y, width, height), _lchat(&chat) {
+  : curs::window(x, y, width, height), _lchat(&chat), _line(), _insert(0) {
+  *this << curs::leaveok(false);
 }
 
 /*****************
@@ -425,8 +426,8 @@ input::input(lchat &chat, int x, int y, int width, int height)
 
 void input::redraw() {
   *this << curs::erase
-        << curs::cursor(0, 0) << curs::cursor(true) << "> " << _line
-        << std::flush;
+        << curs::cursor(0, 0) << "> " << _line
+        << curs::cursor(_insert + 2, 0) << curs::cursor(true);
 }
 
 /********************
@@ -445,31 +446,57 @@ void input::key_event(int ch) {
   case '\n': // Send the line to the server and reset the input.
     chatio << _line << std::endl;
     _line = "";
+    _insert = 0;
     redraw();
     usleep(100);
     return;
 
   case KEY_BACKSPACE:
-    if (not _line.empty()) {
-      _line.resize(_line.length() - 1);
+    if (not _line.empty() and _insert > 0) {
+      _line.erase(_insert - 1, 1);
+      _insert--;
     }
     break;
 
   case KEY_UP:
     _lchat->scroll_chat(lchat::D_UP);
     break;
+
   case KEY_DOWN:
     _lchat->scroll_chat(lchat::D_DOWN);
     break;
+
+  case KEY_LEFT:
+    if (_insert > 0) _insert--;
+    break;
+
+  case KEY_RIGHT:
+    if (_insert < _line.size()) _insert++;
+    break;
+
   case KEY_PPAGE: // Page up key
     _lchat->page_chat(lchat::D_UP);
     break;
+
   case KEY_NPAGE: // Page down key
     _lchat->page_chat(lchat::D_DOWN);
     break;
+
+  case KEY_HOME:
+    _insert = 0;
+    break;
+
+  case KEY_END:
+    _insert = _line.size();
+    break;
+
   default:
     if (isprint(ch)) {
-      _line += ch;
+      std::string in;
+      in += ch; // This is sillyness, but it's what C++ wants.
+
+      _line.insert(_insert, in);
+      _insert++;
     }
     break;
   }

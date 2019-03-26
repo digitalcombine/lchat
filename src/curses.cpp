@@ -87,6 +87,7 @@ void curs::terminal::update() {
   //debug_log << "TERM: update" << std::endl;
 #endif
   ::doupdate();
+  //::refresh();
 }
 
 /**************************
@@ -484,6 +485,13 @@ std::ostream &curs::scrollok::operator()(std::ostream &os) const {
   return os;
 }
 
+std::ostream &curs::leaveok::operator()(std::ostream &os) const {
+  window *osptr = dynamic_cast<window *>(&os);
+  if (osptr != NULL)
+    ::leaveok(osptr->_windowbuf.window(), _value);
+  return os;
+}
+
 std::ostream &curs::attron::operator()(std::ostream &os) const {
   window *osptr = dynamic_cast<window *>(&os);
   if (osptr != NULL) {
@@ -530,8 +538,10 @@ std::ostream &curs::cursor::operator()(std::ostream &os) const {
   window *osptr = dynamic_cast<window *>(&os);
   if (osptr != NULL) {
     os << std::flush;
-    if (_op == POSITION)
+    if (_op == POSITION) {
       ::wmove(osptr->_windowbuf.window(), _y, _x);
+      ::wrefresh(osptr->_windowbuf.window());
+    }
     if (_op == VISIBLITY) {
       if (_show) ::curs_set(1);
       else ::curs_set(0);
