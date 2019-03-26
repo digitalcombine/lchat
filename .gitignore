@@ -44,3 +44,4 @@ Makefile.in
 /src/lchat
 /src/lchatd
 /extra/lchatd.service
+lchat-*.tar.gz
