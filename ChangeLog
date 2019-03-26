@@ -1,3 +1,9 @@
+Version 1.3.0
+2019-03-25 Ron Wills <ron@digitalcombine.ca>
+
+* Enabled unicode if the terminal supports it.
+* Improved message input editing.
+
 Version 1.2.2
 2018-04-19 Ron Wills <ron.rwsoft@gmail.com>
 
