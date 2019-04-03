@@ -2,7 +2,7 @@
 Description=Local Chat dispatcher server
 
 [Service]
-ExecStart=@sbindir@/lchatd
+ExecStart=@sbindir@/lchatd -g users
 
 [Install]
 WantedBy=multi-user.target
