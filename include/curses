@@ -366,7 +366,11 @@ namespace curs {
   private:
     static resize_event_handler *_handler;
 
+#if defined (__FreeBSD__)
+    sig_t _orig_handler;
+#else
     sighandler_t _orig_handler;
+#endif
 
     static void _callback(int signal);
   };

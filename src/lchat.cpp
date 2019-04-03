@@ -632,7 +632,7 @@ void lchat::_draw() {
 
   // Draw the frames around our windows.
   *this << curs::attron(curs::palette::pair(C_TITLE) | A_BOLD)
-        << curs::cursor(0, 0) << "📡" << std::string(w - 1, ' ');
+        << curs::cursor(0, 0) << u"📡" << std::string(w - 1, ' ');
   std::string title("Local Chat v" VERSION);
   *this << curs::cursor((w - title.size()) / 2, 0) << title
         << curs::attroff(curs::palette::pair(C_TITLE) | A_BOLD)

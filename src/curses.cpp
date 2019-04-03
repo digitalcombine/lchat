@@ -524,11 +524,17 @@ std::ostream &curs::bkgd::operator()(std::ostream &os) const {
   if (osptr != NULL) {
     os << std::flush;
 
+#ifdef HAVE_NCURSESW_CURSES_H
     cchar_t c;
     std::memset(&c, 0, sizeof(c));
     c.attr = _attr;
     c.chars[0] = _character;
     ::wbkgrnd(osptr->_windowbuf.window(), &c);
+#else
+    chtype c = _character & 0xff;
+    c |= _attr;
+    ::wbkgd(osptr->_windowbuf.window(), c);
+#endif
     ::wnoutrefresh(osptr->_windowbuf.window());
   }
   return os;
