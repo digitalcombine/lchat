@@ -18,16 +18,10 @@
  * <http://www.gnu.org/licenses/>.
  */
 
-#ifdef HAVE_NCURSESW_CURSES_H
+#ifdef HAVE_NCURSESW_H
 #define NCURSES_WIDECHAR 1
-#include <ncursesw/curses.h>
-#else
-#ifdef HAVE_CURSES_H
+#endif
 #include <curses.h>
-#else
-#error Curses header not found
-#endif
-#endif
 
 /* This is a private header to convert the macro functions found in the
  * curses library into inline functions to prevent namespace collisions.
