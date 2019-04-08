@@ -64,7 +64,7 @@ public:
   void scroll_buffer(unsigned int size);
   void auto_scroll(bool value = true);
 
-  void read_server();
+  bool read_server();
 
   void redraw();
 
@@ -219,15 +219,15 @@ void chat::auto_scroll(bool value) {
  * chat::read_server *
  *********************/
 
-void chat::read_server() {
+bool chat::read_server() {
   std::string line;
   for (;;) {
     try {
       // Attempt to read a line from the server.
       getline(chatio, line);
       if (line.empty()) {
-        usleep(100);
-        return; // Nothing returned so return.
+        //usleep(100);
+        return false; // Nothing returned so return.
       }
 
       // Add the new line to the scroll buffer.
@@ -248,10 +248,10 @@ void chat::read_server() {
     } catch (sockets::ionotready &err) {
       // Nothing to read on the socket, so return.
       chatio.clear();
-      usleep(100);
-      return;
+      return false;
     }
   }
+  return true;
 }
 
 /****************
@@ -434,13 +434,16 @@ void input::redraw() {
  * Input::key_event *
  ********************/
 
+static bool busy = false;
+
 void input::key_event(int ch) {
   redraw();
   curs::terminal::update();
 
   switch (ch) {
   case ERR: // Keyboard input timeout
-    usleep(100);
+    if (busy) usleep(1000);
+    else usleep(100000);
     return;
 
   case '\n': // Send the line to the server and reset the input.
@@ -582,7 +585,7 @@ void lchat::refresh_users() {
 void lchat::operator()() {
   // Our main application loop.
   while (chatio) {
-    _chat.read_server();
+    busy = _chat.read_server();
 
     curs::events::process();
 
