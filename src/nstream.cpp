@@ -450,6 +450,7 @@ sockets::connection::~connection() throw() {
 }
 
 void sockets::connection::connect(int sockfd) {
+  (void)sockfd;
 }
 
 void sockets::connection::close() {
