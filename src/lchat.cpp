@@ -194,7 +194,6 @@ void chat::scroll(scroll_t value) {
   }
 
   redraw();
-  curs::terminal::update();
 }
 
 /***********************
@@ -248,6 +247,7 @@ bool chat::read_server() {
     } catch (sockets::ionotready &err) {
       // Nothing to read on the socket, so return.
       chatio.clear();
+      usleep(100);
       return false;
     }
   }
@@ -372,7 +372,7 @@ void userlist::query_server() {
       break;
     } catch (sockets::ionotready &err) {
       chatio.clear();
-      usleep(1000);
+      usleep(100);
     }
   }
 
@@ -437,22 +437,16 @@ void input::redraw() {
 static bool busy = false;
 
 void input::key_event(int ch) {
-  redraw();
-  curs::terminal::update();
-
   switch (ch) {
   case ERR: // Keyboard input timeout
-    if (busy) usleep(1000);
-    else usleep(100000);
+    if (not busy) usleep(1000);
     return;
 
   case '\n': // Send the line to the server and reset the input.
     chatio << _line << std::endl;
     _line = "";
     _insert = 0;
-    redraw();
-    usleep(100);
-    return;
+    break;
 
   case KEY_BACKSPACE:
     if (not _line.empty() and _insert > 0) {
@@ -587,6 +581,9 @@ void lchat::operator()() {
   while (chatio) {
     busy = _chat.read_server();
 
+    _input.redraw();
+    curs::terminal::update();
+
     curs::events::process();
 
     if (chatio and _refresh_users) {
@@ -698,7 +695,7 @@ int main(int argc, char *argv[]) {
   curs::terminal::initialize();
   curs::terminal::cbreak(true);
   curs::terminal::echo(false);
-  curs::terminal::halfdelay(1);
+  curs::terminal::halfdelay(10);
 
   try {
     lchat chat_ui;
