@@ -39,7 +39,7 @@ static std::ofstream debug_log;
 void curs::terminal::initialize() {
 #ifdef DEBUG
   if (not debug_log.is_open())
-      debug_log.open("curses.log");
+    debug_log.open("curses.log");
   debug_log << "TERM: Initializing" << std::endl;
 #endif
   ::initscr();
@@ -73,7 +73,7 @@ std::string curs::terminal::type() {
 
 void curs::terminal::clear() {
 #ifdef DEBUG
-  //debug_log << "TERM: update" << std::endl;
+  //debug_log << "TERM: clear" << std::endl;
 #endif
   ::clear();
 }
@@ -87,7 +87,6 @@ void curs::terminal::update() {
   //debug_log << "TERM: update" << std::endl;
 #endif
   ::doupdate();
-  //::refresh();
 }
 
 /**************************

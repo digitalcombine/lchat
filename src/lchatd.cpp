@@ -124,9 +124,9 @@ void ChatClient::connect(int sockfd) {
          "%s has joined the chat", _name.c_str());
 
   // Send out notices about the new connection.
-  for (auto it = chat_server.begin(); it != chat_server.end(); ++it) {
-    (sockets::iostream &)(*it->second) << _name << " has joined the chat."
-                                       << std::endl;
+  for (auto &it: chat_server) {
+    (sockets::iostream &)(*it.second) << _name << " has joined the chat."
+                                      << std::endl;
   }
   ios << "? Type '/help' to get a list of chat commands." << std::endl;
 }
@@ -143,12 +143,13 @@ void ChatClient::recv() {
 
   if (!in.empty()) {
     if (in[0] == '/') {
+
       // Server side commands.
       if (in == "/quit" or in == "/exit") {
-        for (auto it = chat_server.begin(); it != chat_server.end(); ++it) {
-          (sockets::iostream &)(*it->second) << _name
-                                             << " has left the chat."
-                                             << std::endl;
+        for (auto &it: chat_server) {
+          (sockets::iostream &)(*it.second) << _name
+                                            << " has left the chat."
+                                            << std::endl;
         }
         this->close();
 
@@ -157,13 +158,13 @@ void ChatClient::recv() {
         std::set<std::string> people;
 
         // Use a std::set to prevent duplicates.
-        for (auto it = chat_server.begin(); it != chat_server.end(); ++it) {
-          people.insert((dynamic_cast<ChatClient *>(it->second))->name());
+        for (auto &it: chat_server) {
+          people.insert((dynamic_cast<ChatClient *>(it.second))->name());
         }
-        for (auto it = people.begin(); it != people.end(); ++it) {
-          result += *it + " ";
+        for (auto &it: people) {
+          result += it + " ";
         }
-        ios << result << std::endl;
+        ios << "~ " << result << std::endl;
 
       } else if (in == "/help") {
         ios << "? All server commands start with the '/' character.\n"
@@ -177,6 +178,7 @@ void ChatClient::recv() {
             << "message\n"
             << "? root: I wish I had your power!\n"
             << std::endl;
+
       } else if (in == "/version" or in == "/about") {
         ios << "Local Chat Server v" << VERSION << "\n"
             << "Copyright (c) 2018 Ron R Wills <ron.rwsoft@gmail.com>\n"
@@ -186,6 +188,7 @@ void ChatClient::recv() {
             << "redistribute it.\n"
             << "There is NO WARRANTY, to the extent permitted by law."
             << std::endl;
+
       } else {
         ios << "? Unknown chat command '" << in << "'\n"
             << "? Type '/help' to get a list of chat commands." << std::endl;
@@ -194,9 +197,9 @@ void ChatClient::recv() {
     } else {
       // A message for everyone to see.
       if (not is_private(in)) {
-        for (auto it = chat_server.begin(); it != chat_server.end(); ++it) {
-          (sockets::iostream &)(*it->second) << _name << ": " << in
-                                             << std::endl;
+        for (auto &it: chat_server) {
+          (sockets::iostream &)(*it.second) << _name << ": " << in
+                                            << std::endl;
         }
       }
     }
@@ -229,14 +232,13 @@ bool ChatClient::is_private(const std::string &mesg) {
 
     // If a message was sent, send in to all our connections as well.
     if (result) {
-
-      for (auto it = chat_server.begin(); it != chat_server.end(); ++it) {
-        if ((dynamic_cast<ChatClient *>(it->second))->name() == _name) {
-          (sockets::iostream &)(*it->second) << "! ^"
-                                             << mesg.substr(0, pos) << ": "
-                                             << mesg.substr(pos + 2,
+      for (auto &it: chat_server) {
+        if ((dynamic_cast<ChatClient *>(it.second))->name() == _name) {
+          (sockets::iostream &)(*it.second) << "! ^"
+                                            << mesg.substr(0, pos) << ": "
+                                            << mesg.substr(pos + 2,
                                                   mesg.length() - pos - 1)
-                                             << std::endl;
+                                            << std::endl;
         }
       }
     }
@@ -294,8 +296,11 @@ static void daemon() {
 static void change_socket_group(const std::string &group_name) {
   struct group *group_entry = getgrnam(group_name.c_str());
 
+  // Lookup the system group entry.
   if (group_entry == NULL) {
-    throw std::runtime_error(std::string("Failed to read group entry: ") +
+    throw std::runtime_error(std::string("Failed to read group ") +
+                             group_name +
+                             " entry: " +
                              strerror(errno));
   }
 
@@ -310,6 +315,11 @@ static void change_socket_group(const std::string &group_name) {
  ***************/
 
 static void sig_handler(int signum) {
+
+#ifdef DEBUG
+  std::clog << "Signal " << signum << " received." << std::endl;
+#endif
+
   switch (signum) {
   case SIGTERM:
   case SIGINT:
@@ -377,7 +387,6 @@ int main(int argc, char *argv[]) {
   // The main loop.
   while (running) {
     chat_server.process_requests();
-    usleep(100);
   }
 
   closelog();

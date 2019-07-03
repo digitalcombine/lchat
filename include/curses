@@ -34,6 +34,8 @@ namespace curs {
 
   class terminal {
   public:
+    static bool isatty();
+
     static void initialize();
 
     static void restore() noexcept;
