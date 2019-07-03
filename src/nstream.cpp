@@ -39,18 +39,18 @@
  * sockets::exception::exception *
  *********************************/
 
-sockets::exception::exception () throw() {
+sockets::exception::exception () noexcept {
 }
 
-sockets::exception::exception (const exception &other) throw()
+sockets::exception::exception (const exception &other) noexcept
   : message(other.message) {
 }
 
-sockets::exception::exception (const char *message) throw()
+sockets::exception::exception (const char *message) noexcept
   : message(message) {
 }
 
-sockets::exception::exception (const std::string &message) throw()
+sockets::exception::exception (const std::string &message) noexcept
   : message(message) {
 }
 
@@ -58,7 +58,7 @@ sockets::exception::exception (const std::string &message) throw()
  * sockets::exception::~exception *
  **********************************/
 
-sockets::exception::~exception() throw() {
+sockets::exception::~exception() noexcept {
 }
 
 /**********************************
@@ -66,7 +66,7 @@ sockets::exception::~exception() throw() {
  **********************************/
 
 sockets::exception&
-sockets::exception::operator= (const exception &other) throw() {
+sockets::exception::operator= (const exception &other) noexcept {
   if (this != &other) {
     message = other.message;
   }
@@ -81,14 +81,14 @@ sockets::exception::operator= (const exception &other) throw() {
  * sockets::ionotready::ionotready *
  ***********************************/
 
-sockets::ionotready::ionotready () throw() {
+sockets::ionotready::ionotready () noexcept {
 }
 
 /************************************
  * sockets::ionotready::~ionotready *
  ************************************/
 
-sockets::ionotready::~ionotready() throw() {
+sockets::ionotready::~ionotready() noexcept {
 }
 
 /******************************************************************************
@@ -127,7 +127,7 @@ sockets::socketbuf::socketbuf(int sockfd, size_t buffer)
  * sockets::socketbuf::~socketbuf *
  **********************************/
 
-sockets::socketbuf::~socketbuf() throw() {
+sockets::socketbuf::~socketbuf() noexcept {
   close();
 }
 
@@ -446,7 +446,7 @@ sockets::recvattempts::operator()(sockets::iostream &ios) const {
 sockets::connection::connection(int sockfd) : ios(sockfd) {
 }
 
-sockets::connection::~connection() throw() {
+sockets::connection::~connection() noexcept {
 }
 
 void sockets::connection::connect(int sockfd) {
@@ -476,7 +476,7 @@ sockets::server_base::server_base() : sockfd(-1) {
  * sockets::server_base::~server_base *
  **************************************/
 
-sockets::server_base::~server_base() throw() {
+sockets::server_base::~server_base() noexcept {
   FD_ZERO(&active_fd_set);
   ::close(sockfd);
 }
@@ -625,8 +625,9 @@ void sockets::server_base::process_requests() {
         if (not _clients[i]->ios or _clients[i]->ios.eof()) {
           std::clog << "Connection closed" << std::endl;
 
-          delete _clients[i]; // Destroy the client.
+          auto tmp = _clients[i];
           _clients.erase(i);  // Remove the client from our list.
+          delete tmp; // Destroy the client.
           FD_CLR(i, &active_fd_set);
         }
       }

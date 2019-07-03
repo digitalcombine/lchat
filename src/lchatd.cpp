@@ -45,7 +45,7 @@ static bool running = true;
 class ChatClient : public sockets::connection {
 public:
   ChatClient(int sockfd) : sockets::connection(sockfd) {}
-  virtual ~ChatClient() throw() {}
+  virtual ~ChatClient() noexcept;
 
   std::string name() const { return _name; }
 
@@ -64,6 +64,14 @@ sockets::server<ChatClient> chat_server;
 /******************************************************************************
  * class ChatClient
  */
+
+ChatClient::~ChatClient() noexcept {
+  for (auto &it: chat_server) {
+    (sockets::iostream &)(*it.second) << _name
+                                      << " has left the chat."
+                                      << std::endl;
+  }
+}
 
 /***********************
  * ChatClient::connect *
