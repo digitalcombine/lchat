@@ -122,6 +122,8 @@ namespace sockets {
     inline bool is_open() const { return sockbuf.is_open(); }
     inline void close();
 
+    int socket() { return sockbuf.socket(); }
+
     friend std::istream &nonblock(std::istream &ios);
     friend std::istream &block(std::istream &ios);
     friend std::ostream &keepalive(std::ostream &ios);
@@ -216,6 +218,7 @@ namespace sockets {
   private:
     int sockfd;
     fd_set active_fd_set;
+    struct timeval timeout;
 
     std::map<int, connection *> _clients;
   };

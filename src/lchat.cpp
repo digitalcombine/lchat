@@ -30,6 +30,7 @@
 #include <pwd.h>
 #include <unistd.h>
 #include <signal.h>
+#include <sys/wait.h>
 
 // Curses color numeric ids.
 static int C_TITLE     = 1;
@@ -87,7 +88,7 @@ class userlist : public curs::window {
 public:
   userlist(int x, int y, int width, int height);
 
-  void query_server();
+  void update(const std::string &list);
 
   void redraw();
 
@@ -123,7 +124,8 @@ public:
 
   void scroll_chat(scroll_dir_t dir);
   void page_chat(scroll_dir_t dir);
-  void refresh_users();
+  //void refresh_users();
+  void refresh_users(const std::string &list);
 
   void operator()();
 
@@ -229,6 +231,26 @@ bool chat::read_server() {
         return false; // Nothing returned so return.
       }
 
+      if (line.compare(0, 2, "~ ") == 0) {
+        // User list update
+        _lchat->refresh_users(line.substr(2, line.length() - 2));
+        return true;
+      }
+
+      // User join message.
+      if (line.length() > 21) {
+        if (line.compare(line.length() - 21, 21, " has joined the chat.") == 0) {
+          chatio << "/who" << std::endl;
+        }
+      }
+
+      // User left message.
+      if (line.length() > 19) {
+        if (line.compare(line.length() - 19, 19, " has left the chat.") == 0) {
+          chatio << "/who" << std::endl;
+        }
+      }
+
       // Add the new line to the scroll buffer.
       _scroll_buffer.push_front(line);
       if (_scroll_buffer.size() > _buffer_size)
@@ -328,20 +350,6 @@ void chat::draw(const std::string &line) {
           << curs::attron(curs::palette::pair(C_SYSMSG))
           << line
           << curs::attroff(curs::palette::pair(C_SYSMSG));
-
-    // User join message.
-    if (line.length() > 21) {
-      if (line.compare(line.length() - 21, 21, " has joined the chat.") == 0) {
-        _lchat->refresh_users();
-      }
-    }
-
-    // User left message.
-    if (line.length() > 19) {
-      if (line.compare(line.length() - 19, 19, " has left the chat.") == 0) {
-        _lchat->refresh_users();
-      }
-    }
   }
 }
 
@@ -357,32 +365,18 @@ userlist::userlist(int x, int y, int width, int height)
   : curs::window(x, y, width, height) {
 }
 
-/**************************
- * userlist::query_server *
- **************************/
+/********************
+ * userlist::update *
+ ********************/
 
-void userlist::query_server() {
-  std::string users;
-
-  // Query the server.
-  chatio << "/who" << std::endl;
-  for (;;) {
-    try {
-      getline(chatio, users);
-      break;
-    } catch (sockets::ionotready &err) {
-      chatio.clear();
-      usleep(100);
-    }
-  }
-
+void userlist::update(const std::string &list) {
   // Clear the old user list.
   _users.clear();
 
   // Repopulate the user list with the servers response.
   size_t last = 0, pos;
-  while ((pos = users.find(" ", last)) != users.npos) {
-    _users.push_back(users.substr(last, pos));
+  while ((pos = list.find(" ", last)) != list.npos) {
+    _users.push_back(list.substr(last, pos));
     last = pos += 1;
   }
 
@@ -412,7 +406,7 @@ void userlist::redraw() {
  */
 
  /****************
-  * Input::Input *
+  * input::input *
   ****************/
 
 input::input(lchat &chat, int x, int y, int width, int height)
@@ -431,7 +425,7 @@ void input::redraw() {
 }
 
 /********************
- * Input::key_event *
+ * input::key_event *
  ********************/
 
 static bool busy = false;
@@ -568,8 +562,8 @@ void lchat::page_chat(scroll_dir_t dir) {
  *  lchat::refresh_users *
  *************************/
 
-void lchat::refresh_users() {
-  _refresh_users = true;
+void lchat::refresh_users(const std::string &list) {
+  _userlist.update(list);
 }
 
 /***********************
@@ -585,11 +579,6 @@ void lchat::operator()() {
     curs::terminal::update();
 
     curs::events::process();
-
-    if (chatio and _refresh_users) {
-      _userlist.query_server();
-      _refresh_users = false;
-    }
 
     curs::terminal::update();
   }
@@ -640,6 +629,34 @@ void lchat::_draw() {
         << std::flush;
 }
 
+/*******
+ * bot *
+ *******/
+
+static int bot(const std::string &command) {
+  auto pid = fork();
+  switch (pid) {
+    case 0: // Child Process
+      // Redirect the childs IO through the socket.
+      dup2(chatio.socket(), STDIN_FILENO);
+      dup2(chatio.socket(), STDOUT_FILENO);
+
+      // Execute the bot command.
+      //exit(system(command.c_str()));
+      execlp("sh", "sh", "-c", command.c_str(), NULL);
+      break; // Stops compiler warnings.
+    case -1:
+      std::cerr << "Bot command failed\n - " << strerror(errno) << std::endl;
+      return -1;
+    default: {
+      int status;
+      waitpid(pid, &status, 0);
+      return status;
+    }
+  }
+  return 0; // Stops compiler warnings.
+}
+
 /******************************************************************************
  * Program entry point.
  */
@@ -647,12 +664,17 @@ void lchat::_draw() {
 int main(int argc, char *argv[]) {
   std::setlocale(LC_ALL, "");
 
+  std::string bot_command;
+
   // Get the command line arguments.
   int opt;
-  while ((opt = getopt(argc, argv, "as:l:")) != -1) {
+  while ((opt = getopt(argc, argv, "as:l:b:")) != -1) {
     switch (opt) {
     case 'a':
       auto_scroll = true;
+      break;
+    case 'b':
+      bot_command = optarg;
       break;
     case 'l':
       scrollback = atoi(optarg);
@@ -691,22 +713,29 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
-  // Setup the terminal.
-  curs::terminal::initialize();
-  curs::terminal::cbreak(true);
-  curs::terminal::echo(false);
-  curs::terminal::halfdelay(10);
+  if (not bot_command.empty()) {
+    chatio >> sockets::block;
+    return bot(bot_command);
+  } else {
 
-  try {
-    lchat chat_ui;
-    chat_ui();
-  } catch (std::exception &err) {
+    // Setup the terminal.
+    curs::terminal::initialize();
+    curs::terminal::cbreak(true);
+    curs::terminal::echo(false);
+    curs::terminal::halfdelay(10);
+
+    try {
+      lchat chat_ui;
+      chat_ui();
+    } catch (std::exception &err) {
+      curs::terminal::restore();
+      std::cerr << err.what() << std::endl;
+      return EXIT_FAILURE;
+    }
+
+    // Restore the terminal.
     curs::terminal::restore();
-    std::cerr << err.what() << std::endl;
-    return EXIT_FAILURE;
   }
 
-  // Restore the terminal.
-  curs::terminal::restore();
   return EXIT_SUCCESS;
 }
