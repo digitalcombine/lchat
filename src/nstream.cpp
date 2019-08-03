@@ -39,18 +39,18 @@
  * sockets::exception::exception *
  *********************************/
 
-sockets::exception::exception () throw() {
+sockets::exception::exception () noexcept {
 }
 
-sockets::exception::exception (const exception &other) throw()
+sockets::exception::exception (const exception &other) noexcept
   : message(other.message) {
 }
 
-sockets::exception::exception (const char *message) throw()
+sockets::exception::exception (const char *message) noexcept
   : message(message) {
 }
 
-sockets::exception::exception (const std::string &message) throw()
+sockets::exception::exception (const std::string &message) noexcept
   : message(message) {
 }
 
@@ -58,7 +58,7 @@ sockets::exception::exception (const std::string &message) throw()
  * sockets::exception::~exception *
  **********************************/
 
-sockets::exception::~exception() throw() {
+sockets::exception::~exception() noexcept {
 }
 
 /**********************************
@@ -66,7 +66,7 @@ sockets::exception::~exception() throw() {
  **********************************/
 
 sockets::exception&
-sockets::exception::operator= (const exception &other) throw() {
+sockets::exception::operator= (const exception &other) noexcept {
   if (this != &other) {
     message = other.message;
   }
@@ -81,14 +81,14 @@ sockets::exception::operator= (const exception &other) throw() {
  * sockets::ionotready::ionotready *
  ***********************************/
 
-sockets::ionotready::ionotready () throw() {
+sockets::ionotready::ionotready () noexcept {
 }
 
 /************************************
  * sockets::ionotready::~ionotready *
  ************************************/
 
-sockets::ionotready::~ionotready() throw() {
+sockets::ionotready::~ionotready() noexcept {
 }
 
 /******************************************************************************
@@ -127,7 +127,7 @@ sockets::socketbuf::socketbuf(int sockfd, size_t buffer)
  * sockets::socketbuf::~socketbuf *
  **********************************/
 
-sockets::socketbuf::~socketbuf() throw() {
+sockets::socketbuf::~socketbuf() noexcept {
   close();
 }
 
@@ -376,7 +376,7 @@ std::istream &sockets::block(std::istream &ios) {
   iostream *iosptr = dynamic_cast<iostream *>(&ios);
   if (iosptr != NULL and iosptr->is_open()) {
     int flags = fcntl(iosptr->sockbuf.socket(), F_GETFL, 0);
-    if (fcntl(iosptr->sockbuf.socket(), F_SETFL, flags | ~O_NONBLOCK) < 0)
+    if (fcntl(iosptr->sockbuf.socket(), F_SETFL, flags & ~O_NONBLOCK) < 0)
       throw sockets::exception((std::string("Setting blocking failed: ") +
                                 strerror(errno)).c_str());
 
@@ -446,7 +446,7 @@ sockets::recvattempts::operator()(sockets::iostream &ios) const {
 sockets::connection::connection(int sockfd) : ios(sockfd) {
 }
 
-sockets::connection::~connection() throw() {
+sockets::connection::~connection() noexcept {
 }
 
 void sockets::connection::connect(int sockfd) {
@@ -455,20 +455,35 @@ void sockets::connection::connect(int sockfd) {
 
 void sockets::connection::close() {
   ios.close();
-  //server->close_client(ios.sockbuf.ocket());
 }
 
 /******************************************************************************
  * class sockets::server_base
  */
 
+/*************************************
+ * sockets::server_base::server_base *
+ *************************************/
+
 sockets::server_base::server_base() : sockfd(-1) {
+  FD_ZERO(&active_fd_set);
+
+  timeout.tv_sec = 10;
+  timeout.tv_usec = 0;
 }
 
-sockets::server_base::~server_base() throw() {
+/**************************************
+ * sockets::server_base::~server_base *
+ **************************************/
+
+sockets::server_base::~server_base() noexcept {
   FD_ZERO(&active_fd_set);
   ::close(sockfd);
 }
+
+/******************************
+ * sockets::server_base::open *
+ ******************************/
 
 void sockets::server_base::open(const char *hostname, const char *service) {
   struct addrinfo hints;
@@ -479,10 +494,10 @@ void sockets::server_base::open(const char *hostname, const char *service) {
             << service << std::endl;
 #endif
   memset(&hints, 0, sizeof(struct addrinfo));
-  hints.ai_family = AF_UNSPEC;    /* Allow IPv4 or IPv6 */
+  hints.ai_family = AF_UNSPEC;     /* Allow IPv4 or IPv6 */
   hints.ai_socktype = SOCK_STREAM; /* Datagram socket */
   hints.ai_flags = AI_CANONNAME|AI_PASSIVE;
-  hints.ai_protocol = 0;          /* Any protocol */
+  hints.ai_protocol = 0;           /* Any protocol */
 
   int res = getaddrinfo(hostname, service, &hints, &info);
   if (res != 0)
@@ -552,6 +567,10 @@ void sockets::server_base::open(const std::string &filename) {
   FD_SET(sockfd, &active_fd_set);
 }
 
+/*******************************
+ * sockets::server_base::close *
+ *******************************/
+
 void sockets::server_base::close() {
   FD_ZERO(&active_fd_set);
   ::close(sockfd);
@@ -589,8 +608,6 @@ void sockets::server_base::process_requests() {
                     << strerror(errno) << std::endl;
           return;
         }
-        //std::clog << "Connected from host "
-        //          << inet_ntoa(clientname.sin_addr) << std::endl;
 
         // Add it to the clients lists.
         FD_SET(newfd, &active_fd_set);
@@ -602,14 +619,15 @@ void sockets::server_base::process_requests() {
         }
 
       } else {
-        /* Data arriving on an already-connected socket. */
 
+        /* Data arriving on an already-connected socket. */
         _clients[i]->recv();
         if (not _clients[i]->ios or _clients[i]->ios.eof()) {
           std::clog << "Connection closed" << std::endl;
-          delete _clients[i]; // Destroy the client.
+
+          auto tmp = _clients[i];
           _clients.erase(i);  // Remove the client from our list.
-          if (i > 0) ::close(i);
+          delete tmp; // Destroy the client.
           FD_CLR(i, &active_fd_set);
         }
       }
@@ -621,8 +639,5 @@ void sockets::server_base::process_requests() {
  *************************************/
 
 void sockets::server_base::operator()() {
-  while (1) {
-    process_requests();
-    usleep(100);
-  }
+  while (true) process_requests();
 }

@@ -12,10 +12,10 @@ lchatd - Local chat daemon and dispatcher.
 
 .SH DESCRIPTION
 
-\fBlchatd\fR is a simple \*(lqIRC-ish\*(rq chat server that dispatches
-messages over a local unix socket for a single computer/server. Ideally the
-target for this software is for headless servers allowing admins and other
-users to easily communicate on the console.
+\fBlchatd\fR is a simple, configuration free, \*(lqIRC-ish\*(rq chat server
+that dispatches messages over a local unix socket for a single
+computer/server. Ideally the target for this software is for headless servers
+allowing admins and other users to easily communicate on the console.
 .PP
 There is no real protocol involved, what you type is what is send over the
 socket. To send a message to everyone, simple send a line of text terminated
@@ -31,7 +31,11 @@ the / character.
 .IP "/quit or /exit"
 The server will close the connection.
 .IP /who
-Displays a line of all the users in the chat session.
+Returns a list of the current users in the chat room. The list starts with
+"~ " so clients can easily identify it to update any user lists it might
+display. For example the /who command may return:
+
+"~ root john paul george ringo"
 .IP "/version or /about"
 Displays version information about the server.
 .IP /help
@@ -74,7 +78,7 @@ Displays version information.
 Written by Ron R Wills.
 
 .SH COPYRIGHT
-Copyright © 2018 Ron R Wills <ron.rwsoft@gmail.com>.
+Copyright © 2018-2019 Ron R Wills <ron@digitalcombine.ca>.
 .br
 License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.
 .br

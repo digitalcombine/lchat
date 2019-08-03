@@ -39,15 +39,15 @@ namespace sockets {
    */
   class exception : public std::exception {
   public:
-    exception () throw();
-    exception (const exception &other) throw();
-    explicit exception (const char *message) throw();
-    explicit exception (const std::string &message) throw();
-    virtual ~exception() throw();
+    exception () noexcept;
+    exception (const exception &other) noexcept;
+    explicit exception (const char *message) noexcept;
+    explicit exception (const std::string &message) noexcept;
+    virtual ~exception() noexcept;
 
-    exception& operator= (const exception&) throw();
+    exception& operator= (const exception&) noexcept;
 
-    virtual const char* what() const throw() { return message.c_str(); }
+    virtual const char* what() const noexcept { return message.c_str(); }
 
   private:
     std::string message;
@@ -55,14 +55,14 @@ namespace sockets {
 
   class ionotready : public exception {
   public:
-    ionotready() throw();
-    virtual ~ionotready() throw();
+    ionotready() noexcept;
+    virtual ~ionotready() noexcept;
   };
 
   class timeout : public exception {
   public:
-    timeout() throw();
-    virtual ~timeout() throw();
+    timeout() noexcept;
+    virtual ~timeout() noexcept;
   };
 
   /** Socket Stream Buffer
@@ -70,7 +70,7 @@ namespace sockets {
   class socketbuf : public std::streambuf {
   public:
     socketbuf(size_t buffer = 1024);
-    virtual ~socketbuf() throw();
+    virtual ~socketbuf() noexcept;
 
     socketbuf *open(const std::string &hostname, const std::string &service);
     socketbuf *open(const std::string &filename);
@@ -122,6 +122,8 @@ namespace sockets {
     inline bool is_open() const { return sockbuf.is_open(); }
     inline void close();
 
+    int socket() { return sockbuf.socket(); }
+
     friend std::istream &nonblock(std::istream &ios);
     friend std::istream &block(std::istream &ios);
     friend std::ostream &keepalive(std::ostream &ios);
@@ -165,7 +167,7 @@ namespace sockets {
   class connection {
   public:
     connection(int sockfd);
-    virtual ~connection() throw();
+    virtual ~connection() noexcept;
 
     operator iostream &() { return ios; }
 
@@ -189,7 +191,7 @@ namespace sockets {
     typedef std::map<int, connection *>::iterator iterator;
 
     server_base();
-    virtual ~server_base() throw();
+    virtual ~server_base() noexcept;
 
     void open(const char *hostname, const char *service);
     void open(const std::string &filename);
@@ -216,6 +218,7 @@ namespace sockets {
   private:
     int sockfd;
     fd_set active_fd_set;
+    struct timeval timeout;
 
     std::map<int, connection *> _clients;
   };

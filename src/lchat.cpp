@@ -1,5 +1,5 @@
 /*                                                                  -*- c++ -*-
- * Copyright (c) 2018 Ron R Wills <ron.rwsoft@gmail.com>
+ * Copyright (c) 2018-2019 Ron R Wills <ron.rwsoft@gmail.com>
  *
  * This file is part of the Local Chat Suite.
  *
@@ -30,6 +30,7 @@
 #include <pwd.h>
 #include <unistd.h>
 #include <signal.h>
+#include <sys/wait.h>
 
 // Curses color numeric ids.
 static int C_TITLE     = 1;
@@ -43,8 +44,7 @@ static int C_PRVMSG    = 6;
 static sockets::iostream chatio;
 static std::string sock_path = "/var/lib/lchat/sock";
 static std::string my_name;
-static unsigned int scrollback = 500;
-static bool auto_scroll = false;
+//static unsigned int scrollback = 500;
 
 /******************************************************************************
  */
@@ -61,12 +61,12 @@ public:
 
   void scroll(scroll_t value);
 
-  void scroll_buffer(unsigned int size);
-  void auto_scroll(bool value = true);
-
   bool read_server();
 
   void redraw();
+
+  static bool auto_scroll;
+  static unsigned int scrollback;
 
 protected:
 
@@ -78,7 +78,6 @@ private:
   std::list<std::string> _scroll_buffer;
   unsigned int _buffer_size;
   unsigned int _buffer_location;
-  bool _auto_scroll;
 };
 
 /**
@@ -87,7 +86,7 @@ class userlist : public curs::window {
 public:
   userlist(int x, int y, int width, int height);
 
-  void query_server();
+  void update(const std::string &list);
 
   void redraw();
 
@@ -123,7 +122,7 @@ public:
 
   void scroll_chat(scroll_dir_t dir);
   void page_chat(scroll_dir_t dir);
-  void refresh_users();
+  void refresh_users(const std::string &list);
 
   void operator()();
 
@@ -145,6 +144,9 @@ private:
  * class chat
  */
 
+bool chat::auto_scroll = false;
+unsigned int chat::scrollback = 500;
+
 /**************
  * chat::chat *
  **************/
@@ -152,9 +154,8 @@ private:
 chat::chat(lchat &chatw, int x, int y, int width, int height)
   : curs::window(x, y, width, height),
   _lchat(&chatw),
-  _buffer_size(500),
-  _buffer_location(0),
-  _auto_scroll(false) {
+  _buffer_size(scrollback),
+  _buffer_location(0) {
   *this << curs::scrollok(true)
         << curs::cursor(0, height - 1)
         << std::flush;
@@ -196,24 +197,6 @@ void chat::scroll(scroll_t value) {
   redraw();
 }
 
-/***********************
- * chat::scroll_buffer *
- ***********************/
-
-void chat::scroll_buffer(unsigned int size) {
-  _buffer_size = size;
-  if (_buffer_size == 0)
-    throw std::range_error("Invalid value for scroll buffer");
-}
-
-/*********************
- * chat::auto_scroll *
- *********************/
-
-void chat::auto_scroll(bool value) {
-  _auto_scroll = value;
-}
-
 /*********************
  * chat::read_server *
  *********************/
@@ -225,8 +208,27 @@ bool chat::read_server() {
       // Attempt to read a line from the server.
       getline(chatio, line);
       if (line.empty()) {
-        //usleep(100);
         return false; // Nothing returned so return.
+      }
+
+      if (line.compare(0, 2, "~ ") == 0) {
+        // User list update
+        _lchat->refresh_users(line.substr(2, line.length() - 2));
+        return true;
+      }
+
+      // User join message.
+      if (line.length() > 21) {
+        if (line.compare(line.length() - 21, 21, " has joined the chat.") == 0) {
+          chatio << "/who" << std::endl;
+        }
+      }
+
+      // User left message.
+      if (line.length() > 19) {
+        if (line.compare(line.length() - 19, 19, " has left the chat.") == 0) {
+          chatio << "/who" << std::endl;
+        }
       }
 
       // Add the new line to the scroll buffer.
@@ -234,20 +236,19 @@ bool chat::read_server() {
       if (_scroll_buffer.size() > _buffer_size)
         _scroll_buffer.resize(_buffer_size);
 
-      // If auto scroll the reposition buffer to the new line.
-      if (_auto_scroll)
+      // Handle message scrolling in the chat window.
+      if (auto_scroll) {
+        // If auto scroll the reposition buffer to the new line.
         _buffer_location = 0;
-
-      // Update the screen.
-      if (_buffer_location > 0)
+      } else if (_buffer_location > 0) {
+        // Update the screen.
         scroll(SCROLL_UP);
-      else
+      } else
         redraw();
 
     } catch (sockets::ionotready &err) {
       // Nothing to read on the socket, so return.
       chatio.clear();
-      usleep(100);
       return false;
     }
   }
@@ -328,20 +329,6 @@ void chat::draw(const std::string &line) {
           << curs::attron(curs::palette::pair(C_SYSMSG))
           << line
           << curs::attroff(curs::palette::pair(C_SYSMSG));
-
-    // User join message.
-    if (line.length() > 21) {
-      if (line.compare(line.length() - 21, 21, " has joined the chat.") == 0) {
-        _lchat->refresh_users();
-      }
-    }
-
-    // User left message.
-    if (line.length() > 19) {
-      if (line.compare(line.length() - 19, 19, " has left the chat.") == 0) {
-        _lchat->refresh_users();
-      }
-    }
   }
 }
 
@@ -357,32 +344,18 @@ userlist::userlist(int x, int y, int width, int height)
   : curs::window(x, y, width, height) {
 }
 
-/**************************
- * userlist::query_server *
- **************************/
+/********************
+ * userlist::update *
+ ********************/
 
-void userlist::query_server() {
-  std::string users;
-
-  // Query the server.
-  chatio << "/who" << std::endl;
-  for (;;) {
-    try {
-      getline(chatio, users);
-      break;
-    } catch (sockets::ionotready &err) {
-      chatio.clear();
-      usleep(100);
-    }
-  }
-
+void userlist::update(const std::string &list) {
   // Clear the old user list.
   _users.clear();
 
   // Repopulate the user list with the servers response.
   size_t last = 0, pos;
-  while ((pos = users.find(" ", last)) != users.npos) {
-    _users.push_back(users.substr(last, pos));
+  while ((pos = list.find(" ", last)) != list.npos) {
+    _users.push_back(list.substr(last, pos));
     last = pos += 1;
   }
 
@@ -412,7 +385,7 @@ void userlist::redraw() {
  */
 
  /****************
-  * Input::Input *
+  * input::input *
   ****************/
 
 input::input(lchat &chat, int x, int y, int width, int height)
@@ -431,7 +404,7 @@ void input::redraw() {
 }
 
 /********************
- * Input::key_event *
+ * input::key_event *
  ********************/
 
 static bool busy = false;
@@ -568,8 +541,8 @@ void lchat::page_chat(scroll_dir_t dir) {
  *  lchat::refresh_users *
  *************************/
 
-void lchat::refresh_users() {
-  _refresh_users = true;
+void lchat::refresh_users(const std::string &list) {
+  _userlist.update(list);
 }
 
 /***********************
@@ -585,11 +558,6 @@ void lchat::operator()() {
     curs::terminal::update();
 
     curs::events::process();
-
-    if (chatio and _refresh_users) {
-      _userlist.query_server();
-      _refresh_users = false;
-    }
 
     curs::terminal::update();
   }
@@ -640,6 +608,65 @@ void lchat::_draw() {
         << std::flush;
 }
 
+/***********
+ * version *
+ ***********/
+
+static void version() {
+  std::cout << "Local Chat v" VERSION << "\n"
+            << "Copyright © 2018-2019 Ron R Wills <ron@digitalcombine.ca>.\n"
+            << "License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.\n\n"
+            << "This is free software: you are free to change and redistribute it.\n"
+            << "There is NO WARRANTY, to the extent permitted by law."
+            << std::endl;
+}
+
+/********
+ * help *
+ ********/
+
+static void help() {
+  std::cout << "Local Chat v" VERSION << "\n"
+            << "  lchat [-s path] [-a] [-l scrollback lines]\n"
+            << "  lchat [-s path] [-m message]\n"
+            << "  lchat [-s path] [-b bot command]\n"
+            << "  lchat -V\n"
+            << "  lchat -h|-?\n\n"
+            << "Copyright © 2018-2019 Ron R Wills <ron@digitalcombine.ca>.\n"
+            << "License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.\n\n"
+            << "This is free software: you are free to change and redistribute it.\n"
+            << "There is NO WARRANTY, to the extent permitted by law."
+            << std::endl;
+}
+
+/*******
+ * bot *
+ *******/
+
+static int bot(const std::string &command) {
+  auto pid = fork();
+  switch (pid) {
+    case 0: // Child Process
+      // Redirect the childs IO through the socket.
+      dup2(chatio.socket(), STDIN_FILENO);
+      dup2(chatio.socket(), STDOUT_FILENO);
+
+      // Execute the bot command.
+      //exit(system(command.c_str()));
+      execlp("sh", "sh", "-c", command.c_str(), NULL);
+      break; // Stops compiler warnings.
+    case -1:
+      std::cerr << "Bot command failed\n - " << strerror(errno) << std::endl;
+      return -1;
+    default: {
+      int status;
+      waitpid(pid, &status, 0);
+      return status;
+    }
+  }
+  return 0; // Stops compiler warnings.
+}
+
 /******************************************************************************
  * Program entry point.
  */
@@ -647,25 +674,40 @@ void lchat::_draw() {
 int main(int argc, char *argv[]) {
   std::setlocale(LC_ALL, "");
 
+  std::string bot_command, message;
+
   // Get the command line arguments.
   int opt;
-  while ((opt = getopt(argc, argv, "as:l:")) != -1) {
+  while ((opt = getopt(argc, argv, "as:l:b:m:h?V")) != -1) {
     switch (opt) {
     case 'a':
-      auto_scroll = true;
+      chat::auto_scroll = true;
       break;
+    case 'b':
+      bot_command = optarg;
+      break;
+    case '?':
+    case 'h':
+      help();
+      return EXIT_SUCCESS;
     case 'l':
-      scrollback = atoi(optarg);
-      if (scrollback == 0) {
+      chat::scrollback = atoi(optarg);
+      if (chat::scrollback == 0) {
         std::cerr << "OPTIONS ERROR: Invalid value \"" << optarg
                   << "\" for the number of scrollback lines"
                   << '\n';
         return EXIT_FAILURE;
       }
       break;
+    case 'm':
+      message = optarg;
+      break;
     case 's':
       sock_path = optarg;
       break;
+    case 'V':
+      version();
+      return EXIT_SUCCESS;
     default:
       std::cerr << "Unknown option -" << (char)optopt << std::endl;
       return EXIT_FAILURE;
@@ -691,22 +733,41 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
-  // Setup the terminal.
-  curs::terminal::initialize();
-  curs::terminal::cbreak(true);
-  curs::terminal::echo(false);
-  curs::terminal::halfdelay(10);
+  if (not message.empty()) {
+    // If the -m option was given then send the message.
 
-  try {
-    lchat chat_ui;
-    chat_ui();
-  } catch (std::exception &err) {
+    std::string serv_mesg;
+
+    chatio >> sockets::block;
+    chatio >> serv_mesg;
+    chatio << message << std::endl;
+
+  } else if (not bot_command.empty()) {
+    // If the -b option was given then run the bot.
+    chatio >> sockets::block;
+    return bot(bot_command);
+
+  } else {
+    // Interactive user interface.
+
+    // Setup the terminal.
+    curs::terminal::initialize();
+    curs::terminal::cbreak(true);
+    curs::terminal::echo(false);
+    curs::terminal::halfdelay(10);
+
+    try {
+      lchat chat_ui;
+      chat_ui();
+    } catch (std::exception &err) {
+      curs::terminal::restore();
+      std::cerr << err.what() << std::endl;
+      return EXIT_FAILURE;
+    }
+
+    // Restore the terminal.
     curs::terminal::restore();
-    std::cerr << err.what() << std::endl;
-    return EXIT_FAILURE;
   }
 
-  // Restore the terminal.
-  curs::terminal::restore();
   return EXIT_SUCCESS;
 }
