@@ -1,5 +1,5 @@
 /*                                                                  -*- c++ -*-
- * Copyright (c) 2018 Ron R Wills <ron.rwsoft@gmail.com>
+ * Copyright (c) 2018-2019 Ron R Wills <ron.rwsoft@gmail.com>
  *
  * This file is part of the Local Chat Suite.
  *
@@ -44,8 +44,7 @@ static int C_PRVMSG    = 6;
 static sockets::iostream chatio;
 static std::string sock_path = "/var/lib/lchat/sock";
 static std::string my_name;
-static unsigned int scrollback = 500;
-static bool auto_scroll = false;
+//static unsigned int scrollback = 500;
 
 /******************************************************************************
  */
@@ -62,12 +61,12 @@ public:
 
   void scroll(scroll_t value);
 
-  void scroll_buffer(unsigned int size);
-  void auto_scroll(bool value = true);
-
   bool read_server();
 
   void redraw();
+
+  static bool auto_scroll;
+  static unsigned int scrollback;
 
 protected:
 
@@ -79,7 +78,6 @@ private:
   std::list<std::string> _scroll_buffer;
   unsigned int _buffer_size;
   unsigned int _buffer_location;
-  bool _auto_scroll;
 };
 
 /**
@@ -124,7 +122,6 @@ public:
 
   void scroll_chat(scroll_dir_t dir);
   void page_chat(scroll_dir_t dir);
-  //void refresh_users();
   void refresh_users(const std::string &list);
 
   void operator()();
@@ -147,6 +144,9 @@ private:
  * class chat
  */
 
+bool chat::auto_scroll = false;
+unsigned int chat::scrollback = 500;
+
 /**************
  * chat::chat *
  **************/
@@ -154,9 +154,8 @@ private:
 chat::chat(lchat &chatw, int x, int y, int width, int height)
   : curs::window(x, y, width, height),
   _lchat(&chatw),
-  _buffer_size(500),
-  _buffer_location(0),
-  _auto_scroll(false) {
+  _buffer_size(scrollback),
+  _buffer_location(0) {
   *this << curs::scrollok(true)
         << curs::cursor(0, height - 1)
         << std::flush;
@@ -198,24 +197,6 @@ void chat::scroll(scroll_t value) {
   redraw();
 }
 
-/***********************
- * chat::scroll_buffer *
- ***********************/
-
-void chat::scroll_buffer(unsigned int size) {
-  _buffer_size = size;
-  if (_buffer_size == 0)
-    throw std::range_error("Invalid value for scroll buffer");
-}
-
-/*********************
- * chat::auto_scroll *
- *********************/
-
-void chat::auto_scroll(bool value) {
-  _auto_scroll = value;
-}
-
 /*********************
  * chat::read_server *
  *********************/
@@ -227,7 +208,6 @@ bool chat::read_server() {
       // Attempt to read a line from the server.
       getline(chatio, line);
       if (line.empty()) {
-        //usleep(100);
         return false; // Nothing returned so return.
       }
 
@@ -256,20 +236,19 @@ bool chat::read_server() {
       if (_scroll_buffer.size() > _buffer_size)
         _scroll_buffer.resize(_buffer_size);
 
-      // If auto scroll the reposition buffer to the new line.
-      if (_auto_scroll)
+      // Handle message scrolling in the chat window.
+      if (auto_scroll) {
+        // If auto scroll the reposition buffer to the new line.
         _buffer_location = 0;
-
-      // Update the screen.
-      if (_buffer_location > 0)
+      } else if (_buffer_location > 0) {
+        // Update the screen.
         scroll(SCROLL_UP);
-      else
+      } else
         redraw();
 
     } catch (sockets::ionotready &err) {
       // Nothing to read on the socket, so return.
       chatio.clear();
-      usleep(100);
       return false;
     }
   }
@@ -664,26 +643,29 @@ static int bot(const std::string &command) {
 int main(int argc, char *argv[]) {
   std::setlocale(LC_ALL, "");
 
-  std::string bot_command;
+  std::string bot_command, message;
 
   // Get the command line arguments.
   int opt;
-  while ((opt = getopt(argc, argv, "as:l:b:")) != -1) {
+  while ((opt = getopt(argc, argv, "as:l:b:m:")) != -1) {
     switch (opt) {
     case 'a':
-      auto_scroll = true;
+      chat::auto_scroll = true;
       break;
     case 'b':
       bot_command = optarg;
       break;
     case 'l':
-      scrollback = atoi(optarg);
-      if (scrollback == 0) {
+      chat::scrollback = atoi(optarg);
+      if (chat::scrollback == 0) {
         std::cerr << "OPTIONS ERROR: Invalid value \"" << optarg
                   << "\" for the number of scrollback lines"
                   << '\n';
         return EXIT_FAILURE;
       }
+      break;
+    case 'm':
+      message = optarg;
       break;
     case 's':
       sock_path = optarg;
@@ -713,10 +695,22 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
-  if (not bot_command.empty()) {
+  if (not message.empty()) {
+    // If the -m option was given then send the message.
+
+    std::string serv_mesg;
+
+    chatio >> sockets::block;
+    chatio >> serv_mesg;
+    chatio << message << std::endl;
+
+  } else if (not bot_command.empty()) {
+    // If the -b option was given then run the bot.
     chatio >> sockets::block;
     return bot(bot_command);
+
   } else {
+    // Interactive user interface.
 
     // Setup the terminal.
     curs::terminal::initialize();
