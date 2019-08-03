@@ -1,5 +1,5 @@
 /*                                                                  -*- c++ -*-
- * Copyright (c) 2018 Ron R Wills <ron.rwsoft@gmail.com>
+ * Copyright (c) 2018-2019 Ron R Wills <ron.rwsoft@gmail.com>
  *
  * This file is part of the Local Chat Suite.
  *
@@ -86,6 +86,10 @@ void ChatClient::connect(int sockfd) {
   if (setsockopt(sockfd, 0, LOCAL_CREDS, &oval, sizeof(oval)) == -1) {
     syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_ERR),
            "Unable to determine connected peer: %s", strerror(errno));
+#ifdef DEBUG
+    std::cerr << "Unable to determine connected peer: " << stderror(errno)
+              << std::endl;
+#endif
     throw sockets::exception(
       std::string("Unable to determine connected peer: ") +
       strerror(errno));
@@ -95,7 +99,10 @@ void ChatClient::connect(int sockfd) {
   int len = sizeof(struct ucred);
 #endif
 
-  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO), "New client connection");
+  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO), "New client connected");
+#ifdef DEBUG
+  std::clog << "New client connected" << std::endl;
+#endif
 
   // Get the clients UID.
 #if defined(__FreeBSD__)
@@ -121,6 +128,10 @@ void ChatClient::connect(int sockfd) {
   if (pw_entry == NULL) {
     syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_ERR),
            "Unable to determine connected user: %s", strerror(errno));
+#ifdef DEBUG
+    std::cerr << "Unable to determine connected peer: " << strerror(errno)
+              << std::endl;
+#endif
     throw sockets::exception(
       std::string("Unable to determine connected user: ") +
       strerror(errno));
@@ -130,6 +141,9 @@ void ChatClient::connect(int sockfd) {
   _name = pw_entry->pw_name;
   syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
          "%s has joined the chat", _name.c_str());
+#ifdef DEBUG
+  std::clog << _name << " has joined the chat." << std::endl;
+#endif
 
   // Send out notices about the new connection.
   for (auto &it: chat_server) {
@@ -264,11 +278,19 @@ static void daemon() {
 
   syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
          "Forking server creating daemon");
+#ifdef DEBUG
+  std::clog << "Forking server creating daemon" << std::endl;
+#endif
 
   // Fork to create our new process.
   pid = fork();
   if (pid < 0) {
-    throw std::runtime_error(std::string("Failed to for daemon: ") +
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
+           "Failed to fork: %s", strerror(errno));
+#ifdef DEBUG
+    std::cerr << "Failed to fork: " << strerror(errno) << std::endl;
+#endif
+    throw std::runtime_error(std::string("Failed to fork: ") +
                              strerror(errno));
   }
   if (pid > 0) {
@@ -329,10 +351,14 @@ static void sig_handler(int signum) {
 #endif
 
   switch (signum) {
+  case SIGHUP:
   case SIGTERM:
   case SIGINT:
     syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
            "Interrupt signal, shutting down");
+#ifdef DEBUG
+    std::clog << "Interrupt signal, shutting down" << std::endl;
+#endif
     running = false;
     break;
   }
@@ -370,6 +396,9 @@ int main(int argc, char *argv[]) {
   openlog("lchatd", LOG_CONS, LOG_PID);
 
   syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO), "Starting");
+#ifdef DEBUG
+  std::clog << "Starting" << std::endl;
+#endif
 
   try {
     if (fork_daemon) daemon();
@@ -383,24 +412,33 @@ int main(int argc, char *argv[]) {
   } catch (std::exception &err) {
     remove(sock_path.c_str());
     syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_ERR), "%s", err.what());
+#ifdef DEBUG
+    std::cerr << err.what() << std::endl;
+#endif
     return EXIT_FAILURE;
   }
 
+  // Setup some signal handlers
   signal(SIGINT, sig_handler);
   signal(SIGTERM, sig_handler);
+  signal(SIGHUP, sig_handler);
+  // Needed for clients that suddenly disconnect.
+  signal(SIGPIPE, SIG_IGN);
 
   syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
          "Local chat listening on socket %s", sock_path.c_str());
+#ifdef DEBUG
+  std::clog << "Local chat listening on socket " << sock_path << std::endl;
+#endif
 
   // The main loop.
   while (running) {
     chat_server.process_requests();
   }
 
+  // Cleanup.
   closelog();
-
   chat_server.close();
-
   remove(sock_path.c_str());
 
   return EXIT_SUCCESS;
