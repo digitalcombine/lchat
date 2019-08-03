@@ -608,6 +608,37 @@ void lchat::_draw() {
         << std::flush;
 }
 
+/***********
+ * version *
+ ***********/
+
+static void version() {
+  std::cout << "Local Chat v" VERSION << "\n"
+            << "Copyright © 2018-2019 Ron R Wills <ron@digitalcombine.ca>.\n"
+            << "License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.\n\n"
+            << "This is free software: you are free to change and redistribute it.\n"
+            << "There is NO WARRANTY, to the extent permitted by law."
+            << std::endl;
+}
+
+/********
+ * help *
+ ********/
+
+static void help() {
+  std::cout << "Local Chat v" VERSION << "\n"
+            << "  lchat [-s path] [-a] [-l scrollback lines]\n"
+            << "  lchat [-s path] [-m message]\n"
+            << "  lchat [-s path] [-b bot command]\n"
+            << "  lchat -V\n"
+            << "  lchat -h|-?\n\n"
+            << "Copyright © 2018-2019 Ron R Wills <ron@digitalcombine.ca>.\n"
+            << "License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.\n\n"
+            << "This is free software: you are free to change and redistribute it.\n"
+            << "There is NO WARRANTY, to the extent permitted by law."
+            << std::endl;
+}
+
 /*******
  * bot *
  *******/
@@ -647,7 +678,7 @@ int main(int argc, char *argv[]) {
 
   // Get the command line arguments.
   int opt;
-  while ((opt = getopt(argc, argv, "as:l:b:m:")) != -1) {
+  while ((opt = getopt(argc, argv, "as:l:b:m:h?V")) != -1) {
     switch (opt) {
     case 'a':
       chat::auto_scroll = true;
@@ -655,6 +686,10 @@ int main(int argc, char *argv[]) {
     case 'b':
       bot_command = optarg;
       break;
+    case '?':
+    case 'h':
+      help();
+      return EXIT_SUCCESS;
     case 'l':
       chat::scrollback = atoi(optarg);
       if (chat::scrollback == 0) {
@@ -670,6 +705,9 @@ int main(int argc, char *argv[]) {
     case 's':
       sock_path = optarg;
       break;
+    case 'V':
+      version();
+      return EXIT_SUCCESS;
     default:
       std::cerr << "Unknown option -" << (char)optopt << std::endl;
       return EXIT_FAILURE;

@@ -364,6 +364,35 @@ static void sig_handler(int signum) {
   }
 }
 
+/***********
+ * version *
+ ***********/
+
+static void version() {
+  std::cout << "Local Chat Dispatcher v" VERSION << "\n"
+            << "Copyright © 2018-2019 Ron R Wills <ron@digitalcombine.ca>.\n"
+            << "License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.\n\n"
+            << "This is free software: you are free to change and redistribute it.\n"
+            << "There is NO WARRANTY, to the extent permitted by law."
+            << std::endl;
+}
+
+/********
+ * help *
+ ********/
+
+static void help() {
+  std::cout << "Local Chat Dispatcher v" VERSION << "\n"
+            << "  lchatd [-d] [-s path] [-g group] [-w path]\n"
+            << "  lchatd -V\n"
+            << "  lchatd -h|-?\n\n"
+            << "Copyright © 2018-2019 Ron R Wills <ron@digitalcombine.ca>.\n"
+            << "License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.\n\n"
+            << "This is free software: you are free to change and redistribute it.\n"
+            << "There is NO WARRANTY, to the extent permitted by law."
+            << std::endl;
+}
+
 /******************************************************************************
  * Entry Point
  */
@@ -373,7 +402,7 @@ int main(int argc, char *argv[]) {
 
   // Get the command line options.
   int opt;
-  while ((opt = getopt(argc, argv, "dg:s:w:")) != -1) {
+  while ((opt = getopt(argc, argv, "dg:s:w:Vh?")) != -1) {
     switch (opt) {
     case 'd':
       fork_daemon = true;
@@ -381,9 +410,16 @@ int main(int argc, char *argv[]) {
     case 'g':
       sock_group = optarg;
       break;
+    case '?':
+    case 'h':
+      help();
+      return EXIT_SUCCESS;
     case 's':
       sock_path = optarg;
       break;
+    case 'V':
+      version();
+      return EXIT_SUCCESS;
     case 'w':
       cwd_path = optarg;
       break;
