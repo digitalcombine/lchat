@@ -5,17 +5,27 @@ lchat - Local chat console client.
 
 .SH SYNOPSIS
 .B lchat
-[-s \fIpath\fR]
+[-s \fIpath\fR] [-a] [-l \fIscrollback\fR]
+.PP
+.B lchat
+[-s \fIpath\fR] [-m \fImessage\fR]
+.PP
+.B lchat
+[-s \fIpath\fR] [-b \fIbot command\fR]
 .PP
 .B lchat
 -V
+.PP
+.B lchat
+-h|-?
 
 .SH DESCRIPTION
 
-\fBlchat\fR is a simple console chat client. The local chat suite is a very
-simple 'IRC-ish' chat system over a unix socket for a single computer/server.
-Ideally the target for this software is for headless servers allowing admins
-and other users to easily communicate on the console.
+\fBlchat\fR is a simple, configuration free, console chat client. The local
+chat suite is a very simple 'IRC-ish' chat system over a unix socket for a
+single computer/server. Ideally the target for this software is for headless
+servers allowing admins and other users to easily communicate with each other
+on the console.
 .PP
 There is no real protocol involved, what you type is sent exactly as
 is. To send a message to everyone, simple type a line and hit enter.
@@ -30,27 +40,40 @@ the / character.
 .IP "/quit or /exit"
 The server will close the connection.
 .IP /who
-Displays a line of all the users in the chat session.
+Updates the all the users in the chat room.
 .IP "/version or /about"
 Displays version information about the server.
 .IP /help
 Displays a simple help screen.
 
 .SH OPTIONS
+.IP "-a"
+Sets the conversation window to automatically scroll to any new messages that
+are received.
+.IP "-l scrollback"
+Specifies the number of lines to be kept in the scrollback buffer. The default
+is 500 lines.
+.IP "-m message"
+Send message to the chat room. This allows for scripts and other programs to
+post messages within the chat room.
+.IP "-b bot command"
+Instead of bring up a user interface, the chat stream is piped to the
+\fIbot command's\fR standard in and out. The conversation is read through
+standard in and the bot can send messages to the conversation through standard
+out. Note standard error is not redirected and can be used for debugging
+purposes.
 .IP "-s path"
 Specifies the \fIpath\fR to the chat servers unix socket file.
-.IP "-l scrollback"
-Specifies the number of lines to be kept in the scrollback buffer. The default is 500 lines.
-.IP "-a"
-Sets the conversation window to automatically scroll to any new messages that are received.
 .IP -V
 Displays version information.
+.IP "-h -?"
+Displays a very brief help screen.
 
 .SH AUTHOR
 Written by Ron R Wills.
 
 .SH COPYRIGHT
-Copyright © 2018 Ron R Wills <ron.rwsoft@gmail.com>.
+Copyright © 2018-2019 Ron R Wills <ron@digitalcombine.ca>.
 .br
 License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.
 .br
