@@ -213,7 +213,10 @@ sockets::socketbuf *sockets::socketbuf::open(const std::string &filename) {
  *****************************/
 
 void sockets::socketbuf::close() {
-  if (sockfd >= 0) ::close(sockfd);
+  if (sockfd >= 0) {
+    sync();
+    ::close(sockfd);
+  }
   sockfd = -1;
 
   // Reset the stream buffers.

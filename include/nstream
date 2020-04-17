@@ -120,7 +120,7 @@ namespace sockets {
     inline void open(const std::string &filename) { sockbuf.open(filename); }
 
     inline bool is_open() const { return sockbuf.is_open(); }
-    inline void close();
+    void close();
 
     int socket() { return sockbuf.socket(); }
 
