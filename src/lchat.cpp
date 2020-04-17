@@ -775,7 +775,7 @@ static void help() {
  * send_message *
  ****************/
 
-static int send_message(const std::string &line) {
+static void send_message(const std::string &line) {
   // Send the message to the dispatcher.
   chatio << line << std::endl;
 #ifdef DEBUG
