@@ -1,7 +1,8 @@
 TODO
 ====
 
-- Use c++11 regex library for parsing. What's there is to simple and
-   might be tricked :(
-- Should use is_atty in lchat to allow piping so lchat can be used in
-   scripts.
+- Use c++11 regex library for parsing. What's there is very basic and
+  might be tricked :(
+- Emacs/Vi key bindings for the client input.
+- Input history in the client.
+- TAB key history/command auto completion in the client.
