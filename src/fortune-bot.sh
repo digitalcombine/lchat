@@ -14,15 +14,19 @@ while [ $RRES == 0 ]; do
     case "${LINE}" in
         *\:\ !fortune)
             debug "Sending fortune"
-            fortune -s
+            fortune -u -s
             ;;
         *\ has\ joined\ the\ chat.)
             WHO=$(echo "$LINE" | cut -f1 -d' ')
-            echo "${WHO}: Type !fortune if you want hear a furtune"
+            echo "/msg ${WHO} Type !fortune if you want hear a fortune"
             ;;
     esac
 
     read -s LINE
     RRES=$?
+    while [ $RRES == 0 -a -z "$LINE" ]; do
+        read -s LINE
+        RRES=$?
+    done
 
 done
