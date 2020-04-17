@@ -42,6 +42,8 @@ static std::string cwd_path = "/var/lib/lchat";
 static std::string sock_group;
 static bool running = true;
 
+/** Client Connection Class.
+ */
 class ChatClient : public sockets::connection {
 public:
   ChatClient(int sockfd) : sockets::connection(sockfd) {}
@@ -56,28 +58,45 @@ protected:
   virtual void recv();
 
 private:
-  bool is_private(const std::string &mesg);
+  //bool is_private(const std::string &mesg);
+  void send_private(const std::string &who, const std::string &mesg);
 };
 
 sockets::server<ChatClient> chat_server;
+
+/** Count the number of connections a user has to the chat server.
+ * @param name The name of the user.
+ * @return The number of connections to the server.
+ */
+static unsigned int connections(const std::string &name) {
+  unsigned int count = 0;
+
+  // Count the connections.
+  for (auto &it: chat_server)
+    if ((dynamic_cast<ChatClient *>(it.second))->name() == name)
+      count++;
+
+#ifdef DEBUG
+  std::clog << "User " << name << " has " << count << " connections."
+              << std::endl;
+#endif
+
+  return count;
+}
 
 /******************************************************************************
  * class ChatClient
  */
 
-ChatClient::~ChatClient() noexcept {
-  for (auto &it: chat_server) {
-    (sockets::iostream &)(*it.second) << _name
-                                      << " has left the chat."
-                                      << std::endl;
-  }
-}
+ChatClient::~ChatClient() noexcept {}
 
 /***********************
  * ChatClient::connect *
  ***********************/
 
 void ChatClient::connect(int sockfd) {
+
+  // Prepare the credentials of the user that connected over the unix socket.
 #if defined(__FreeBSD__)
   struct xucred ucred;
   int len = sizeof(struct xucred);
@@ -99,6 +118,7 @@ void ChatClient::connect(int sockfd) {
   int len = sizeof(struct ucred);
 #endif
 
+  // Log a new connection was made.
   syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO), "New client connected");
 #ifdef DEBUG
   std::clog << "New client connected" << std::endl;
@@ -145,12 +165,17 @@ void ChatClient::connect(int sockfd) {
   std::clog << _name << " has joined the chat." << std::endl;
 #endif
 
-  // Send out notices about the new connection.
-  for (auto &it: chat_server) {
-    (sockets::iostream &)(*it.second) << _name << " has joined the chat."
-                                      << std::endl;
+  /* Send out notices about the new connection if it is the users first
+   * connection to the server. If there is already another connection don't
+   * send this message, it gets way to spammy.
+   */
+  if (connections(_name) == 1) {
+    for (auto &it: chat_server) {
+      (sockets::iostream &)(*it.second) << _name << " has joined the chat."
+                                        << std::endl;
+    }
+    ios << "? Type '/help' to get a list of chat commands." << std::endl;
   }
-  ios << "? Type '/help' to get a list of chat commands." << std::endl;
 }
 
 /********************
@@ -164,18 +189,29 @@ void ChatClient::recv() {
   getline(ios, in);
 
   if (!in.empty()) {
+
+#ifdef DEBUG
+    std::clog << "From " << _name << ": " << in << std::endl;
+#endif
+
     if (in[0] == '/') {
+      // Parse the command sent.
+      int pos = in.find(' ');
+      std::string cmd(in.substr(1, in.npos));
+      if (pos != in.npos) cmd = in.substr(1, pos - 1);
 
       // Server side commands.
-      if (in == "/quit" or in == "/exit") {
-        for (auto &it: chat_server) {
-          (sockets::iostream &)(*it.second) << _name
-                                            << " has left the chat."
-                                            << std::endl;
+      if (cmd == "quit" or cmd == "exit") {
+        if (connections(_name) < 2) {
+          for (auto &it: chat_server) {
+            (sockets::iostream &)(*it.second) << _name
+                                              << " has left the chat."
+                                              << std::endl;
+          }
         }
         this->close();
 
-      } else if (in == "/who") {
+      } else if (cmd == "who") {
         std::string result;
         std::set<std::string> people;
 
@@ -188,20 +224,20 @@ void ChatClient::recv() {
         }
         ios << "~ " << result << std::endl;
 
-      } else if (in == "/help") {
+      } else if (cmd == "help") {
         ios << "? All server commands start with the '/' character.\n"
-            << "? /help               - Displays this help dialog.\n"
-            << "? /who                - Displays a list of all the users in "
+            << "? /help                  - Displays this help dialog.\n"
+            << "? /who                   - Displays a list of all the users in "
             << "the chat.\n"
-            << "? /quit or /exit      - Leaves the chat.\n"
-            << "? /version or /about  - Version information about this "
-            << "server\n? \n"
-            << "? Starting a message with 'username: ' sends a private "
-            << "message\n"
-            << "? root: I wish I had your power!\n"
+            << "? /quit or /exit         - Leaves the chat.\n"
+            << "? /version or /about     - Version information about this "
+            << "server.\n"
+            << "? /msg user message...\n"
+            << "? /priv user message...\n"
+            << "? /query user message... - Sends a private message to user.\n"
             << std::endl;
 
-      } else if (in == "/version" or in == "/about") {
+      } else if (cmd == "version" or cmd == "about") {
         ios << "Local Chat Server v" << VERSION << "\n"
             << "Copyright (c) 2018 Ron R Wills <ron.rwsoft@gmail.com>\n"
             << "License GPLv3+; GNU GPL version 3 or later "
@@ -211,6 +247,17 @@ void ChatClient::recv() {
             << "There is NO WARRANTY, to the extent permitted by law."
             << std::endl;
 
+      } else if (cmd == "msg" or cmd == "priv" or cmd == "query") {
+        std::string pmesg(in.substr(pos + 1, in.npos));
+        size_t piv = pmesg.find(' ');
+
+        if (piv != pmesg.npos) {
+          send_private(pmesg.substr(0, piv), pmesg.substr(piv + 1, pmesg.npos));
+        } else {
+          ios << "? Invalid private message, the command is:\n"
+              << "? /" << cmd << " user message..." << std::endl;
+        }
+
       } else {
         ios << "? Unknown chat command '" << in << "'\n"
             << "? Type '/help' to get a list of chat commands." << std::endl;
@@ -218,55 +265,52 @@ void ChatClient::recv() {
 
     } else {
       // A message for everyone to see.
-      if (not is_private(in)) {
-        for (auto &it: chat_server) {
-          (sockets::iostream &)(*it.second) << _name << ": " << in
-                                            << std::endl;
-        }
+      for (auto &it: chat_server) {
+        (sockets::iostream &)(*it.second) << _name << ": " << in
+                                          << std::endl;
       }
     }
   }
 }
 
-/**************************
- * ChatClient::is_private *
- **************************/
+/****************************
+ * ChatClient::send_private *
+ ****************************/
 
-bool ChatClient::is_private(const std::string &mesg) {
-  size_t pos = mesg.find(':');
-  bool result = false;
-
-  // Do we have a private message?
-  if (pos != mesg.npos) {
+void ChatClient::send_private(const std::string &who, const std::string &mesg) {
+  bool has_user = false;
 
     // Send the private message to all the users connections.
-    for (auto it = chat_server.begin(); it != chat_server.end(); ++it) {
-      if (mesg.compare(0, pos,
-            (dynamic_cast<ChatClient *>(it->second))->name()) == 0) {
-        (sockets::iostream &)(*it->second) << "! "
-                                           << _name << ": "
-                                           << mesg.substr(pos + 2,
-                                                mesg.length() - pos - 1)
-                                           << std::endl;
-        result = true;
-      }
-    }
-
-    // If a message was sent, send in to all our connections as well.
-    if (result) {
-      for (auto &it: chat_server) {
-        if ((dynamic_cast<ChatClient *>(it.second))->name() == _name) {
-          (sockets::iostream &)(*it.second) << "! ^"
-                                            << mesg.substr(0, pos) << ": "
-                                            << mesg.substr(pos + 2,
-                                                  mesg.length() - pos - 1)
-                                            << std::endl;
-        }
-      }
+  for (auto &it: chat_server) {
+    if ((dynamic_cast<ChatClient *>(it.second))->name() == who) {
+      (sockets::iostream &)(*it.second) << "! "
+                                        << _name << ": "
+                                        << mesg << std::endl;
+      has_user = true;
     }
   }
 
-  return result;
+  if (has_user) {
+    // If a message was sent, send in to all our connections as well.
+    for (auto &it: chat_server) {
+      if ((dynamic_cast<ChatClient *>(it.second))->name() == _name) {
+        (sockets::iostream &)(*it.second) << "! ^"
+                                          << who << ": "
+                                          << mesg << std::endl;
+      }
+    }
+  } else {
+    // If a message wasn't sent, send an error message our connections.
+    for (auto &it: chat_server) {
+      if ((dynamic_cast<ChatClient *>(it.second))->name() == _name) {
+        (sockets::iostream &)(*it.second) << "User "
+                                          << who
+                                          << " is not available, "
+                                          << "private message not sent:\n "
+                                          << mesg << std::endl;
+      }
+    }
+  }
 }
 
 /**********
@@ -429,6 +473,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  // Open the logging facility.
   openlog("lchatd", LOG_CONS, LOG_PID);
 
   syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO), "Starting");
@@ -455,12 +500,13 @@ int main(int argc, char *argv[]) {
   }
 
   // Setup some signal handlers
-  signal(SIGINT, sig_handler);
+  signal(SIGINT,  sig_handler);
   signal(SIGTERM, sig_handler);
-  signal(SIGHUP, sig_handler);
+  signal(SIGHUP,  sig_handler);
   // Needed for clients that suddenly disconnect.
   signal(SIGPIPE, SIG_IGN);
 
+  // Log the fact we're up and runnging.
   syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
          "Local chat listening on socket %s", sock_path.c_str());
 #ifdef DEBUG
