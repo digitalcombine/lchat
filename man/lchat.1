@@ -1,4 +1,4 @@
-.TH lchat 1 "14 Febuarary 2018" "Version 1.4.1"
+.TH lchat 1 "14 Febuarary 2018" "Version 1.5.1"
 
 .SH NAME
 lchat - Local chat console client.
@@ -37,13 +37,17 @@ is 500 lines.
 Send message to the chat room. This allows for scripts and other programs to
 post messages within the chat room.
 .IP "-b 'bot command'"
-Instead of bring up a user interface, the chat stream is piped to the
-\fIbot command's\fR standard in and out. The conversation is read through
-standard in and the bot can send messages to the conversation through standard
-out. The standard error is not redirected and can be used for debugging
-purposes.
+Instead of bring up a user interface, the chat stream is piped to the \fIbot
+command's\fR standard input and output. The conversation is read through
+standard input and the bot can send messages to the conversation through
+standard output. The standard error is not redirected and can be used for
+debugging purposes.
 .PP
 .RS
+All chat messages will be sent to the bot and the bot must read them via
+standard input. This includes even when the bot is only outputting messages. If
+the bots input is not read this can eventually lockup the \fBlchatd\fR server.
+.PP
 The \fIbot command\fR is executed via \fIsh -c command\fR. A simple trick to
 replace the shell process with the bot command is to use the shell built exec,
 for example: \fIlchat -b 'exec my_bot_script.sh'\fR.
@@ -109,6 +113,9 @@ The input window has many of the standard editing keys available. The left, righ
 Although the \fBlchat\fR client is completely Unicode enabled the input is not
 capable yet to handle Unicode input. This is because the internal insert pointer
 not be smart enough to work with multi-byte characters yet.
+
+Badly written bots that never read the chat messages from their standard input
+can eventually lockup the \fBlchatd\fR server.
 
 .SH AUTHOR
 Written by Ron R Wills.
