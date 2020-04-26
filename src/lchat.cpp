@@ -287,8 +287,9 @@ bool chat::read_server() {
 
       // Add the new line to the scroll buffer.
       _scroll_buffer.push_front(line);
-      if (_scroll_buffer.size() > _buffer_size)
-        _scroll_buffer.resize(_buffer_size);
+      while (_scroll_buffer.size() > _buffer_size) {
+        _scroll_buffer.pop_back();
+      }
 
       // Handle message scrolling in the chat window.
       if (auto_scroll) {
