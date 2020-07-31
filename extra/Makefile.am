@@ -1,11 +1,11 @@
 # /lib/systemd/system/
 
-EXTRA_DIST=lchatd.service.in
+EXTRADIST=lchatd.service.in
+systemddata_DATA=lchatd.service
+systemddatadir="/lib/systemd/system"
 
 if SYSTEMD
-install-data-local: lchatd.service
-	$(MKDIR_P) "$(DESTDIR)/lib/systemd/system"
-	$(INSTALL_SCRIPT) 'lchatd.service' '$(DESTDIR)/lib/systemd/system'
+# If systemd was enabled in configure
 
 edit = sed -e 's|@sbindir[@]|$(sbindir)|g'
 
@@ -13,10 +13,10 @@ lchatd.service: Makefile
 	rm -f $@ $@.tmp
 	srcdir=''; \
 		test -f ./$@.in || srcdir=$(srcdir)/; \
-		$(edit) $${srcdir}$@.in >$@.tmp
+		$(edit) $${srcdir}$@.in > $@.tmp
 
-	chmod a-xw $@.tmp
 	mv $@.tmp $@
+	chmod a-x,g-w,o-w $@
 
 lchatd.service: lchatd.service.in
 endif
