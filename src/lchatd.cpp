@@ -39,7 +39,8 @@
 // Global settings.
 static std::string sock_path = "/var/lib/lchat/sock";
 static std::string cwd_path = "/var/lib/lchat";
-static std::string sock_group;
+static std::string chat_group;
+static std::string chat_user;
 static bool running = true;
 
 /** Client Connection Class.
@@ -196,7 +197,7 @@ void ChatClient::recv() {
 
     if (in[0] == '/') {
       // Parse the command sent.
-      int pos = in.find(' ');
+      size_t pos = in.find(' ');
       std::string cmd(in.substr(1, in.npos));
       if (pos != in.npos) cmd = in.substr(1, pos - 1);
 
@@ -363,11 +364,11 @@ static void daemon() {
   close(STDERR_FILENO);
 }
 
-/***********************
- * change_socket_group *
- ***********************/
+/****************
+ * change_group *
+ ****************/
 
-static void change_socket_group(const std::string &group_name) {
+static void change_group(const std::string &group_name) {
   struct group *group_entry = getgrnam(group_name.c_str());
 
   // Lookup the system group entry.
@@ -378,9 +379,56 @@ static void change_socket_group(const std::string &group_name) {
                              strerror(errno));
   }
 
+  // Change the group ownership of the Unix domain socket.
   if (chown(sock_path.c_str(), -1, group_entry->gr_gid) == -1) {
     throw std::runtime_error(std::string("Failed to change socket group: ") +
                              strerror(errno));
+  }
+
+  // Change to the group ourselves.
+  if (setgid(group_entry->gr_gid) == -1) {
+    /* We don't consider a failure here unrecoverable but we do log the fact we
+     * could change groups.
+     */
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING), "%s %s",
+           std::string("Failed to change daemon group: ").c_str(),
+           strerror(errno));
+  }
+}
+
+/****************
+ * change_user *
+ ****************/
+
+static void change_user(const std::string &user_name) {
+  struct passwd *user_entry = getpwnam(user_name.c_str());
+
+  // Lookup the system user entry.
+  if (user_entry == nullptr) {
+    throw std::runtime_error(std::string("Failed to read user ") +
+                             user_name +
+                             " entry: " +
+                             strerror(errno));
+  }
+
+  // Change the ownership of the Unix domain socket.
+  if (chown(sock_path.c_str(), user_entry->pw_uid, -1) == -1) {
+    /* We don't consider a failure here unrecoverable but we do log the fact we
+     * could change groups.
+     */
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING), "%s %s",
+           std::string("Failed to change daemon user: ").c_str(),
+           strerror(errno));
+  }
+
+  // Change to the user ourselves.
+  if (setuid(user_entry->pw_uid) == -1) {
+    /* We don't consider a failure here unrecoverable but we do log the fact we
+     * could change groups.
+     */
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING), "%s %s",
+           std::string("Failed to change daemon user: ").c_str(),
+           strerror(errno));
   }
 }
 
@@ -446,13 +494,13 @@ int main(int argc, char *argv[]) {
 
   // Get the command line options.
   int opt;
-  while ((opt = getopt(argc, argv, "dg:s:w:Vh?")) != -1) {
+  while ((opt = getopt(argc, argv, "dg:s:w:u:Vh?")) != -1) {
     switch (opt) {
     case 'd':
       fork_daemon = true;
       break;
     case 'g':
-      sock_group = optarg;
+      chat_group = optarg;
       break;
     case '?':
     case 'h':
@@ -460,6 +508,9 @@ int main(int argc, char *argv[]) {
       return EXIT_SUCCESS;
     case 's':
       sock_path = optarg;
+      break;
+    case 'u':
+      chat_user = optarg;
       break;
     case 'V':
       version();
@@ -482,13 +533,24 @@ int main(int argc, char *argv[]) {
 #endif
 
   try {
+    // Possible fork as an independant daemon.
     if (fork_daemon) daemon();
     else umask(0117);
 
+    // Open the Unix domain socket.
     chat_server.open(sock_path);
 
-    if (not sock_group.empty())
-      change_socket_group(sock_group);
+    // Change the group of the socket and of us.
+    if (not chat_group.empty())
+      change_group(chat_group);
+
+    // Change the user of the socket and of us.
+    if (not chat_user.empty()) {
+      change_user(chat_user);
+    } else if (getuid() == 0) {
+      // If we're root reduce ourself to nobody.
+      change_user("nobody");
+    }
 
   } catch (std::exception &err) {
     remove(sock_path.c_str());
