@@ -1,5 +1,5 @@
 /*                                                                  -*- c++ -*-
- * Copyright (c) 2018-2019 Ron R Wills <ron.rwsoft@gmail.com>
+ * Copyright (c) 2018-2020 Ron R Wills <ron.rwsoft@gmail.com>
  *
  * This file is part of the Local Chat Suite.
  *
@@ -102,7 +102,7 @@ void ChatClient::connect(int sockfd) {
   int oval;
 
   if (setsockopt(sockfd, 0, LOCAL_CREDS, &oval, sizeof(oval)) == -1) {
-    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_ERR),
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
            "Unable to determine connected peer: %s", strerror(errno));
 #ifdef DEBUG
     std::cerr << "Unable to determine connected peer: " << stderror(errno)
@@ -131,7 +131,7 @@ void ChatClient::connect(int sockfd) {
   if (getsockopt(sockfd, SOL_SOCKET, SO_PEERCRED,
                  &ucred, (socklen_t *)&len) == -1) {
 #endif
-    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_ERR),
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
            "Unable to determine connected peer: %s", strerror(errno));
     throw sockets::exception(
       std::string("Unable to determine connected peer: ") +
@@ -145,7 +145,7 @@ void ChatClient::connect(int sockfd) {
   struct passwd *pw_entry = getpwuid(ucred.uid);
 #endif
   if (pw_entry == NULL) {
-    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_ERR),
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
            "Unable to determine connected user: %s", strerror(errno));
 #ifdef DEBUG
     std::cerr << "Unable to determine connected peer: " << strerror(errno)
@@ -158,7 +158,7 @@ void ChatClient::connect(int sockfd) {
 
   // Log the connection.
   _name = pw_entry->pw_name;
-  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
+  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO),
          "%s has joined the chat", _name.c_str());
 #ifdef DEBUG
   std::clog << _name << " has joined the chat." << std::endl;
@@ -400,7 +400,7 @@ static void open_unix_socket(bool second_attempt = false) {
 static void daemon() {
   pid_t pid, sid;
 
-  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
+  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO),
          "Forking server creating daemon");
 #ifdef DEBUG
   std::clog << "Forking server creating daemon" << std::endl;
@@ -409,7 +409,7 @@ static void daemon() {
   // Fork to create our new process.
   pid = fork();
   if (pid < 0) {
-    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING),
            "Failed to fork: %s", strerror(errno));
 #ifdef DEBUG
     std::cerr << "Failed to fork: " << strerror(errno) << std::endl;
@@ -478,7 +478,7 @@ static void sig_handler(int signum) {
   case SIGHUP:
   case SIGTERM:
   case SIGINT:
-    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO),
            "Interrupt signal, shutting down");
 #ifdef DEBUG
     std::clog << "Interrupt signal, shutting down" << std::endl;
@@ -586,7 +586,7 @@ int main(int argc, char *argv[]) {
   signal(SIGPIPE, SIG_IGN);
 
   // Log the fact we're up and runnging.
-  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
+  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO),
          "Local chat listening on socket %s", sock_path.c_str());
 #ifdef DEBUG
   std::clog << "Local chat listening on socket " << sock_path << std::endl;
