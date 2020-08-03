@@ -556,12 +556,12 @@ void sockets::server_base::open(const std::string &filename) {
     ::close(sockfd);
     sockfd = -1;
     throw sockets::exception(std::string("Unable able to bind to ") +
-                             filename);
+                             filename + ": " + strerror(errno));
   }
 
   if (listen(sockfd, 1) == -1)
     throw sockets::exception(std::string("Unable able to listen to ") +
-                             filename);
+                             filename + ": " + strerror(errno));
 
   std::clog << "Server listening on " << filename << std::endl;
 
