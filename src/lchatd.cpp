@@ -58,7 +58,6 @@ protected:
   virtual void recv();
 
 private:
-  //bool is_private(const std::string &mesg);
   void send_private(const std::string &who, const std::string &mesg);
 };
 
@@ -196,7 +195,7 @@ void ChatClient::recv() {
 
     if (in[0] == '/') {
       // Parse the command sent.
-      int pos = in.find(' ');
+      size_t pos = in.find(' ');
       std::string cmd(in.substr(1, in.npos));
       if (pos != in.npos) cmd = in.substr(1, pos - 1);
 
@@ -309,6 +308,87 @@ void ChatClient::send_private(const std::string &who, const std::string &mesg) {
                                           << "private message not sent:\n "
                                           << mesg << std::endl;
       }
+    }
+  }
+}
+
+/*******************
+ * test_for_server *
+ *******************/
+
+static bool test_for_server() {
+  /*  If a chat server goes down hard, the unix domain socket could have been
+   * left in the filesystem. In this case, when we attempt to create the socket
+   * we will fail to bind to it.
+   *  Here we attempt to connect as a client to see if we can talk to the
+   * chat server. If we can't then we have a dead socket to clean up.
+   */
+  static sockets::iostream chatio;
+
+#ifdef DEBUG
+    std::clog << "Testing for existing chat server" << std::endl;
+#endif
+
+  try {
+    chatio.open(sock_path);
+
+    chatio << "/who" << std::endl;
+  } catch (...) {
+#ifdef DEBUG
+    std::clog << "Failed to talk to server, possible dead socket" << std::endl;
+#endif
+    return false;
+  }
+
+  return true;
+}
+
+/********************
+ * open_unix_socket *
+ ********************/
+
+static void open_unix_socket(bool second_attempt = false) {
+  /*  Here we attempt to create and open the unix domain socket for the chat
+   * server. During hard shutdowns a dead socket could remain on the filesystem
+   * preventing the chat server from starting. So here we make two attempts to
+   * get things rolling. If the first attempt fails, we check for a dead
+   * socket, delete it if necessary then make a second final attempt.
+   */
+
+  try {
+    // Open the unix domain socket.
+    chat_server.open(sock_path);
+
+  } catch (std::exception &err) {
+    // We failed to make the socket and listen on it.
+
+    if (not second_attempt) {
+      syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING), "%s", err.what());
+      syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING), "Attempting to recover");
+#ifdef DEBUG
+      std::cerr << err.what() << "\n Attempting to recover" << std::endl;
+#endif
+    }
+
+    if (not second_attempt and not test_for_server()) {
+      // Looks like we have a dead socket.
+#ifdef DEBUG
+      std::clog << "Dead socket found, " << sock_path << ", cleaning it up"
+                << std::endl;
+#endif
+      syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING),
+             "Dead socket found, %s, cleaning it up",
+             sock_path.c_str());
+
+      // Remove the socket and try to connect again.
+      if (remove(sock_path.c_str()) == -1) {
+        std::cerr << strerror(errno) << std::endl;
+      }
+      open_unix_socket(true);
+
+    } else {
+      // Complete failure to create the server socket.
+      throw;
     }
   }
 }
@@ -485,13 +565,12 @@ int main(int argc, char *argv[]) {
     if (fork_daemon) daemon();
     else umask(0117);
 
-    chat_server.open(sock_path);
+    open_unix_socket();
 
     if (not sock_group.empty())
       change_socket_group(sock_group);
 
   } catch (std::exception &err) {
-    remove(sock_path.c_str());
     syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_ERR), "%s", err.what());
 #ifdef DEBUG
     std::cerr << err.what() << std::endl;
