@@ -560,7 +560,7 @@ static void version() {
 
 static void help() {
   std::cout << "Local Chat Dispatcher v" VERSION << "\n"
-            << "  lchatd [-d] [-s path] [-g group] [-w path]\n"
+            << "  lchatd [-d] [-s path] [-u user] [-g group] [-w path]\n"
             << "  lchatd -V\n"
             << "  lchatd -h|-?\n\n"
             << "Copyright © 2018-2019 Ron R Wills <ron@digitalcombine.ca>.\n"
@@ -605,6 +605,7 @@ int main(int argc, char *argv[]) {
       break;
     default:
       std::cerr << "Unknown option -" << (char)optopt << std::endl;
+      help();
       return EXIT_FAILURE;
     }
   }
