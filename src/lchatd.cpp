@@ -35,6 +35,9 @@
 #include <sys/un.h>
 #include <sys/ucred.h>
 #endif
+#ifdef DEBUG
+#include <fcntl.h>
+#endif
 
 // Global settings.
 static std::string sock_path = "/var/lib/lchat/sock";
@@ -102,7 +105,7 @@ void ChatClient::connect(int sockfd) {
   int oval;
 
   if (setsockopt(sockfd, 0, LOCAL_CREDS, &oval, sizeof(oval)) == -1) {
-    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_ERROR),
            "Unable to determine connected peer: %s", strerror(errno));
 #ifdef DEBUG
     std::cerr << "Unable to determine connected peer: " << stderror(errno)
@@ -184,10 +187,7 @@ void ChatClient::connect(int sockfd) {
 void ChatClient::recv() {
   std::string in;
 
-  // Get the command from the client.
-  getline(ios, in);
-
-  if (!in.empty()) {
+  while (getline(ios, in, '\n')) {
 
 #ifdef DEBUG
     std::clog << "From " << _name << ": " << in << std::endl;
@@ -208,7 +208,9 @@ void ChatClient::recv() {
                                               << std::endl;
           }
         }
+        ios.clear();
         this->close();
+        return;
 
       } else if (cmd == "who") {
         std::string result;
@@ -270,6 +272,9 @@ void ChatClient::recv() {
       }
     }
   }
+
+  // ionotready will be thrown, so clear it.
+  ios.clear();
 }
 
 /****************************
