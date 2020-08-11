@@ -761,7 +761,7 @@ static void version() {
 static void help() {
   std::cout << "Local Chat v" VERSION << "\n"
             << "  lchat [-s path] [-a] [-l scrollback lines]\n"
-            << "  lchat [-s path] [-m message]\n"
+            << "  lchat [-s path] [-m|-m message]\n"
             << "  lchat [-s path] [-b bot command]\n"
             << "  lchat -V\n"
             << "  lchat -h|-?\n\n"
@@ -882,7 +882,7 @@ int main(int argc, char *argv[]) {
 
   // Get the command line arguments.
   int opt;
-  while ((opt = getopt(argc, argv, ":as:l:b:m:hV")) != -1) {
+  while ((opt = getopt(argc, argv, ":as:l:b:m:hV?")) != -1) {
     switch (opt) {
     case 'a':
       chat::auto_scroll = true;
@@ -890,6 +890,7 @@ int main(int argc, char *argv[]) {
     case 'b':
       bot_command = optarg;
       break;
+    case '?':
     case 'h':
       help();
       return EXIT_SUCCESS;

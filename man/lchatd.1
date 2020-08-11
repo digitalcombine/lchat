@@ -1,14 +1,17 @@
-.TH lchatd 1 "14 Febuarary 2018" "Version 1.5.1"
+.TH lchatd 1 "10 August 2020" "Version 1.5.2"
 
 .SH NAME
 \fBlchatd\fR - Local chat daemon and dispatcher.
 
 .SH SYNOPSIS
 .B lchatd
-[-d] [-s \fIpath\fR] [-g \fIgroup\fR] [-w \fIpath\fR]
+[-d] [-s \fIpath\fR] [-u \fIuser\fR] [-g \fIgroup\fR] [-w \fIpath\fR]
 .PP
 .B lchatd
 -V
+.PP
+.B lchatd
+-h|-?
 
 .SH DESCRIPTION
 \fBlchatd\fR is a simple, configuration free, \*(lqIRC-ish\*(rq chat server that
@@ -59,15 +62,21 @@ Puts the program in the background as a system daemon.
 .IP "-s path"
 Specifies the \fIpath\fR to the chat servers unix socket file. The default
 path is /var/lib/lchat/sock.
+.IP "-u user"
+Specifies the user to change the unix socket to and if possible change the uid
+for chatd as well. If chatd is started with root privileges and this option
+isn't specified then the option \fI-u nobody\fR is the default.
 .IP "-g group"
-Specifies the group to change the unix socket to. This should be set to a
-group for login users only and prevent other system services from being able
-to access the chat service.
+Specifies the group to change the unix socket to and if possible change the gid
+for chatd as well. This should be set to a group for login users only and
+prevent other system services from being able to access the chat service.
 .IP "-w path"
 Set the the working path of the daemon. Ideally, this should be set to the
 directory where the unix socket is found. The default is /var/lib/lchat.
 .IP -V
 Displays version information.
+.IP "-h|-?"
+Displays a very brief help screen.
 
 .SH AUTHOR
 Written by Ron R Wills.
