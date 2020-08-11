@@ -31,6 +31,11 @@
 #include <fcntl.h>
 #include <cstdio>
 
+#define DEBUG_NSTREAM 1
+#ifdef DEBUG_NSTREAM
+#include <iostream>
+#endif
+
 /******************************************************************************
  * class sockets::exception
  */
@@ -100,7 +105,8 @@ sockets::ionotready::~ionotready() noexcept {
  *********************************/
 
 sockets::socketbuf::socketbuf(size_t buffer)
-  : sockfd(-1), _obuf(buffer), _ibuf(buffer), _attempts(1), _delay(100000) {
+  : _fd(-1), _rflags(0), _sflags(0), _obuf(buffer), _ibuf(buffer),
+    _notready(false) {
 
   // Setup the stream buffers.
   char *end = &_ibuf.front() + _ibuf.size();
@@ -111,10 +117,8 @@ sockets::socketbuf::socketbuf(size_t buffer)
 }
 
 sockets::socketbuf::socketbuf(int sockfd, size_t buffer)
-  : sockfd(-1), _obuf(buffer), _ibuf(buffer), _attempts(1), _delay(100000) {
-  // The socket has already been created for us.
-  this->sockfd = sockfd;
-
+  : _fd(sockfd), _rflags(0), _sflags(0), _obuf(buffer), _ibuf(buffer),
+    _notready(false) {
   // Setup the stream buffers.
   char *end = &_ibuf.front() + _ibuf.size();
   setg(end, end, end);
@@ -144,7 +148,7 @@ sockets::socketbuf *sockets::socketbuf::open(const std::string &hostname,
   /*  Resolve the hostname and get a list of the possible ways of connecting
    * to the given service.
    */
-#ifdef DEBUG
+#ifdef DEBUG_NSTREAM
   std::clog << "NET: Getting socket info for " << hostname << ":" << service
             << std::endl;
 #endif
@@ -160,13 +164,14 @@ sockets::socketbuf *sockets::socketbuf::open(const std::string &hostname,
 
   // Iterate throught the result and attempt to connect to the server.
   for (iter = info; iter != NULL; iter = iter->ai_next) {
-    if ((sockfd = ::socket(iter->ai_family, iter->ai_socktype,
-                           iter->ai_protocol)) == -1) {
+    if ((_fd = ::socket(iter->ai_family, iter->ai_socktype,
+                        iter->ai_protocol)) == -1) {
       continue;
     }
 
-    if (connect(sockfd, iter->ai_addr, iter->ai_addrlen) == -1) {
-      ::close(sockfd);
+    if (connect(_fd, iter->ai_addr, iter->ai_addrlen) == -1) {
+      ::close(_fd);
+      _fd = -1;
       continue;
     }
 
@@ -187,8 +192,8 @@ sockets::socketbuf *sockets::socketbuf::open(const std::string &filename) {
   struct sockaddr_un addr;
 
   // Create the unix socket.
-  sockfd = ::socket(AF_UNIX, SOCK_STREAM, 0);
-  if (sockfd < 0) {
+  _fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+  if (_fd < 0) {
     throw sockets::exception(
       std::string("Unable to create unix domain socket ") +
       filename + ": " + strerror(errno));
@@ -198,7 +203,7 @@ sockets::socketbuf *sockets::socketbuf::open(const std::string &filename) {
   memset(&addr, 0, sizeof(addr));
   addr.sun_family = AF_UNIX;
   strncpy(addr.sun_path, filename.c_str(), sizeof(addr.sun_path) - 1);
-  if (connect(sockfd, (struct sockaddr *)&addr,
+  if (connect(_fd, (struct sockaddr *)&addr,
               sizeof(struct sockaddr_un)) < 0) {
     throw sockets::exception(
       std::string("Unable to connect to unix domain socket ") +
@@ -213,11 +218,11 @@ sockets::socketbuf *sockets::socketbuf::open(const std::string &filename) {
  *****************************/
 
 void sockets::socketbuf::close() {
-  if (sockfd >= 0) {
+  if (_fd >= 0) {
     sync();
-    ::close(sockfd);
+    ::close(_fd);
   }
-  sockfd = -1;
+  _fd = -1;
 
   // Reset the stream buffers.
   char *end = &_ibuf.front() + _ibuf.size();
@@ -257,29 +262,37 @@ int sockets::socketbuf::sync() {
 
 sockets::socketbuf::int_type sockets::socketbuf::underflow() {
   if (gptr() >= egptr()) {
+    if (_notready) {
+      _notready = false;
+      throw sockets::ionotready();
+    }
+
     // The buffer has been exhausted, read more in from the socket.
+    int res = recv(_fd, &_ibuf.front(), _ibuf.size(), _rflags);
 
-    int res = 0;
-    for (unsigned int attempts = 0; res <= 0; ++attempts) {
-      res = read(sockfd, &_ibuf.front(), _ibuf.size());
+    if (res == 0) {
+      // End of file, usually it was disconnected.
+#ifdef DEBUG_NSTREAM
+      std::clog << "sockbuf::underflow eof" << std::endl;
+#endif
+      return traits_type::eof();
 
-      if (res == 0) {
-        // End of file, usually it was disconnected.
-        return traits_type::eof();
-
-      } else if (res < 0) {
-        if (errno == EAGAIN or errno == EWOULDBLOCK) {
-          /*  If the socket is non-blocking then we can try again to read
-           * the socket or throw an ionotready exception.
-           */
-          if (attempts == (_attempts - 1)) throw sockets::ionotready();
-          usleep(_delay);
-        } else {
-          // We got an io error.
-          throw sockets::exception((std::string("Socket read error: ") +
-                                    strerror(errno)));
-        }
+    } else if (res < 0) {
+      if (errno == EAGAIN or errno == EWOULDBLOCK) {
+        /*  If the socket is non-blocking then we can try again to read
+         * the socket or throw an ionotready exception.
+         */
+        throw sockets::ionotready();
+      } else {
+#ifdef DEBUG_NSTREAM
+        std::clog << "sockbuf::underflow: " << strerror(errno) << std::endl;
+#endif
+        // We got an io error.
+        throw sockets::exception((std::string("Socket read error: ") +
+                                  strerror(errno)));
       }
+    } else if ((unsigned int)res < _ibuf.size()) {
+      _notready = true;
     }
 
     // Update the buffer.
@@ -299,7 +312,7 @@ bool sockets::socketbuf::oflush() {
 
   // Write the entire buffer to the socket.
   do {
-    int wrote = write(sockfd, buf, wlen);
+    int wrote = send(_fd, buf, wlen, _sflags);
     if (wrote == -1) return false;
     buf += wrote;
     wlen -= wrote;
@@ -321,23 +334,23 @@ bool sockets::socketbuf::oflush() {
  *******************************/
 
 sockets::iostream::iostream(size_t buffer)
-  : std::iostream(&sockbuf), sockbuf(buffer) {
+  : std::iostream(&_sockbuf), _sockbuf(buffer) {
 }
 
 sockets::iostream::iostream(const std::string &hostname,
                             const std::string &service,
                             size_t buffer)
-  : std::iostream(&sockbuf), sockbuf(buffer) {
-  sockbuf.open(hostname, service);
+  : std::iostream(&_sockbuf), _sockbuf(buffer) {
+  _sockbuf.open(hostname, service);
 }
 
 sockets::iostream::iostream(const std::string &filename, size_t buffer)
-  : std::iostream(&sockbuf), sockbuf(buffer) {
-  sockbuf.open(filename);
+  : std::iostream(&_sockbuf), _sockbuf(buffer) {
+  _sockbuf.open(filename);
 }
 
 sockets::iostream::iostream(int sockfd, size_t buffer)
-  : std::iostream(&sockbuf), sockbuf(sockfd, buffer) {
+  : std::iostream(&_sockbuf), _sockbuf(sockfd, buffer) {
 }
 
 /****************************
@@ -345,7 +358,7 @@ sockets::iostream::iostream(int sockfd, size_t buffer)
  ****************************/
 
 void sockets::iostream::close() {
-  sockbuf.close();
+  _sockbuf.close();
   setstate(eofbit);
 }
 
@@ -360,8 +373,8 @@ void sockets::iostream::close() {
 std::istream &sockets::nonblock(std::istream &ios) {
   iostream *iosptr = dynamic_cast<iostream *>(&ios);
   if (iosptr != NULL and iosptr->is_open()) {
-    int flags = fcntl(iosptr->sockbuf.socket(), F_GETFL, 0);
-    if (fcntl(iosptr->sockbuf.socket(), F_SETFL, flags | O_NONBLOCK) < 0)
+    int flags = fcntl(iosptr->_sockbuf.socket(), F_GETFL, 0);
+    if (fcntl(iosptr->_sockbuf.socket(), F_SETFL, flags | O_NONBLOCK) < 0)
       throw sockets::exception(std::string("Setting nonblocking failed: ") +
                                strerror(errno));
 
@@ -378,13 +391,28 @@ std::istream &sockets::nonblock(std::istream &ios) {
 std::istream &sockets::block(std::istream &ios) {
   iostream *iosptr = dynamic_cast<iostream *>(&ios);
   if (iosptr != NULL and iosptr->is_open()) {
-    int flags = fcntl(iosptr->sockbuf.socket(), F_GETFL, 0);
-    if (fcntl(iosptr->sockbuf.socket(), F_SETFL, flags & ~O_NONBLOCK) < 0)
+    int flags = fcntl(iosptr->_sockbuf.socket(), F_GETFL, 0);
+    if (fcntl(iosptr->_sockbuf.socket(), F_SETFL, flags & ~O_NONBLOCK) < 0)
       throw sockets::exception((std::string("Setting blocking failed: ") +
                                 strerror(errno)).c_str());
 
     // The stream should catch and deal with exceptions.
     iosptr->exceptions(iosptr->exceptions() & ~std::iostream::badbit);
+  }
+  return ios;
+}
+
+/************************
+ * sockets::msgdontwait *
+ ************************/
+
+std::istream &sockets::msgdontwait(std::istream &ios) {
+  iostream *iosptr = dynamic_cast<iostream *>(&ios);
+  if (iosptr != NULL and iosptr->is_open()) {
+    iosptr->_sockbuf._rflags |= MSG_DONTWAIT;
+
+    // The stream should catch and deal with exceptions.
+    iosptr->exceptions(iosptr->exceptions() | std::iostream::badbit);
   }
   return ios;
 }
@@ -397,7 +425,7 @@ std::ostream &sockets::keepalive(std::ostream &ios) {
   iostream *iosptr = dynamic_cast<iostream *>(&ios);
   if (iosptr != NULL) {
     int optval = 1;
-    if(setsockopt(iosptr->sockbuf.socket(), SOL_SOCKET, SO_KEEPALIVE,
+    if(setsockopt(iosptr->_sockbuf.socket(), SOL_SOCKET, SO_KEEPALIVE,
                   &optval, sizeof(optval)) < 0) {
       throw sockets::exception(std::string("Setting keep alive failed: ") +
                                strerror(errno));
@@ -414,7 +442,7 @@ std::ostream &sockets::nokeepalive(std::ostream &ios) {
   iostream *iosptr = dynamic_cast<iostream *>(&ios);
   if (iosptr != NULL) {
     int optval = 0;
-    if(setsockopt(iosptr->sockbuf.socket(), SOL_SOCKET, SO_KEEPALIVE,
+    if(setsockopt(iosptr->_sockbuf.socket(), SOL_SOCKET, SO_KEEPALIVE,
                   &optval, sizeof(optval)) < 0) {
       throw sockets::exception(std::string("Clearing keep alive failed: ") +
                                strerror(errno));
@@ -423,22 +451,20 @@ std::ostream &sockets::nokeepalive(std::ostream &ios) {
   return ios;
 }
 
-std::ostream &sockets::recvtimeout::operator()(std::ostream &ios) const {
+/************************
+ * sockets::recvtimeout *
+ ************************/
+
+std::istream &sockets::recvtimeout::operator()(std::istream &ios) const {
   iostream *iosptr = dynamic_cast<iostream *>(&ios);
   if (iosptr != NULL) {
-    if(setsockopt(iosptr->sockbuf.socket(), SOL_SOCKET, SO_RCVTIMEO,
+    if(setsockopt(iosptr->_sockbuf.socket(), SOL_SOCKET, SO_RCVTIMEO,
                   &arg, sizeof(arg)) < 0) {
       throw sockets::exception(
         std::string("Setting receive timeout failed: ") +
         strerror(errno));
     }
   }
-  return ios;
-}
-
-sockets::iostream &
-sockets::recvattempts::operator()(sockets::iostream &ios) const {
-  ios.sockbuf.attempts(arg);
   return ios;
 }
 
@@ -492,7 +518,7 @@ void sockets::server_base::open(const char *hostname, const char *service) {
   struct addrinfo hints;
   struct addrinfo *info, *iter;
 
-#ifdef DEBUG
+#ifdef DEBUG_NSTREAM
   std::clog << "NET: Getting socket info for " << hostname << ":"
             << service << std::endl;
 #endif
@@ -531,8 +557,10 @@ void sockets::server_base::open(const char *hostname, const char *service) {
     throw sockets::exception((std::string("Unable able to listen to ") +
                           hostname + ":" + service).c_str());
 
+#ifdef DEBUG_NSTREAM
   std::clog << "Server listening on " << hostname << ":"
             << service << std::endl;
+#endif
 
   // Initialize the set of active sockets.
   FD_ZERO(&active_fd_set);
@@ -563,7 +591,9 @@ void sockets::server_base::open(const std::string &filename) {
     throw sockets::exception(std::string("Unable able to listen to ") +
                              filename + ": " + strerror(errno));
 
+#ifdef DEBUG_NSTREAM
   std::clog << "Server listening on " << filename << std::endl;
+#endif
 
   // Initialize the set of active sockets.
   FD_ZERO(&active_fd_set);
