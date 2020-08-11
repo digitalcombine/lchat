@@ -6,9 +6,9 @@ servers allowing admins or other users to easily communicate on the console.
 
 ## Requirements
 
-GNU Automake & Autoconf tools
-GNU C++ Compiler Suite
-Curses Library
+* GNU Automake & Autoconf tools
+* GNU C++ Compiler Suite
+* Curses Library
 
 ## Install
 
