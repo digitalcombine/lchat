@@ -72,19 +72,25 @@ namespace sockets {
     socketbuf(size_t buffer = 1024);
     virtual ~socketbuf() noexcept;
 
+    /** Open a TCP/IP connection to the given host and service.
+     */
     socketbuf *open(const std::string &hostname, const std::string &service);
+
+    /** Open a socket to the give unix domain socket. If the socket doesn't exist
+     * then it will attempt to create the socket file.
+     */
     socketbuf *open(const std::string &filename);
 
-    bool is_open() const { return (sockfd > -1); }
+    bool is_open() const { return (_fd > -1); }
 
     void close();
 
-    unsigned int attempts(unsigned int count) { return (_attempts = count); }
-
-    int socket() const { return sockfd; }
+    int socket() const { return _fd; }
 
     friend class iosstream;
     friend class iostream;
+
+    friend std::istream &msgdontwait(std::istream &ios);
 
   protected:
     virtual int_type overflow(int_type ch);
@@ -93,15 +99,16 @@ namespace sockets {
     virtual int_type underflow();
 
   private:
-    socketbuf(int sockfd, size_t buffer = 1024);
+    int _fd;
+    int _rflags;
+    int _sflags;
 
-    int sockfd;
     std::vector<char> _obuf;
     std::vector<char> _ibuf;
 
-    unsigned int _attempts;
-    useconds_t _delay;
+    bool _notready;
 
+    socketbuf(int sockfd, size_t buffer = 1024);
     bool oflush();
   };
 
@@ -115,27 +122,29 @@ namespace sockets {
     iostream(const std::string &filename, size_t buffer = 1024);
 
     inline void open(const std::string &hostname, const std::string &service) {
-      sockbuf.open(hostname, service);
+      _sockbuf.open(hostname, service);
     }
-    inline void open(const std::string &filename) { sockbuf.open(filename); }
+    inline void open(const std::string &filename) { _sockbuf.open(filename); }
 
-    inline bool is_open() const { return sockbuf.is_open(); }
+    inline bool is_open() const { return _sockbuf.is_open(); }
     void close();
 
-    int socket() { return sockbuf.socket(); }
+    int socket() { return _sockbuf.socket(); }
 
     friend std::istream &nonblock(std::istream &ios);
     friend std::istream &block(std::istream &ios);
+    friend std::istream &msgdontwait(std::istream &ios);
+
     friend std::ostream &keepalive(std::ostream &ios);
     friend std::ostream &nokeepalive(std::ostream &ios);
+
     friend class recvtimeout;
-    friend class recvattempts;
     friend class connection;
 
   private:
     iostream(int sockfd, size_t buffer = 1024);
 
-    socketbuf sockbuf;
+    socketbuf _sockbuf;
   };
 
   template <class Ty>
@@ -143,23 +152,38 @@ namespace sockets {
   public:
     explicit osmanip(Ty arg) : arg(arg) {}
 
-    virtual iostream &operator()(iostream &ios) const = 0;
+    virtual std::ostream &operator()(std::ostream &is) const = 0;
 
-    Ty arg;
+  protected:
+    Ty &arg;
   };
+
+  template <class Ty>
+  class ismanip {
+  public:
+    explicit ismanip(Ty arg) : arg(arg) {}
+
+    virtual std::istream &operator()(std::istream &is) const = 0;
+
+  protected:
+    Ty &arg;
+  };
+
+  /****************************************************************************
+   * Input Stream Modifiers
+   */
 
   std::istream &nonblock(std::istream &ios);
   std::istream &block(std::istream &ios);
+  std::istream &msgdontwait(std::istream &ios);
+
   std::ostream &keepalive(std::ostream &ios);
   std::ostream &nokeepalive(std::ostream &ios);
-  class recvtimeout : public osmanip<timeval> {
+
+  class recvtimeout : public ismanip<timeval> {
   public:
-    virtual std::ostream &operator()(std::ostream &ios) const;
-  };
-  class recvattempts : public osmanip<int> {
-  public:
-    explicit recvattempts(int count) : osmanip<int>(count) {}
-    virtual iostream &operator()(iostream &ios) const;
+    recvtimeout(timeval &arg) : ismanip(arg) {}
+    virtual std::istream &operator()(std::istream &ios) const;
   };
 
   /** Server Client Connection.
@@ -179,8 +203,6 @@ namespace sockets {
     virtual void connect(int sockfd);
     virtual void recv() = 0;
     void close();
-
-  private:
   };
 
   /**
@@ -233,15 +255,15 @@ namespace sockets {
 }
 
 template <class Ty>
-sockets::iostream& operator <<(sockets::iostream &ios,
-                               const sockets::osmanip<Ty> &manip) {
-  return manip(ios);
+std::ostream& operator <<(std::iostream &os,
+                          const sockets::osmanip<Ty> &manip) {
+  return manip(os);
 }
 
 template <class Ty>
-sockets::iostream& operator >>(sockets::iostream &ios,
-                               const sockets::osmanip<Ty> &manip) {
-  return manip(ios);
+std::istream& operator >>(std::istream &is,
+                          const sockets::ismanip<Ty> &manip) {
+  return manip(is);
 }
 
 #endif /* _NETWORK_SOCKETS_H */
