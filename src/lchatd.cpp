@@ -464,6 +464,9 @@ static void change_group(const std::string &group_name) {
                              strerror(errno));
   }
 
+  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO),
+         "Changing to group %d/%s", group_entry->gr_gid, group_name.c_str());
+
   // Change the group ownership of the Unix domain socket.
   if (chown(sock_path.c_str(), -1, group_entry->gr_gid) == -1) {
     throw std::runtime_error(std::string("Failed to change socket group: ") +
@@ -475,9 +478,8 @@ static void change_group(const std::string &group_name) {
     /* We don't consider a failure here unrecoverable but we do log the fact we
      * could change groups.
      */
-    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING), "%s %s",
-           std::string("Failed to change daemon group: ").c_str(),
-           strerror(errno));
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING),
+           "Failed to change daemon group: %s", strerror(errno));
   }
 }
 
@@ -496,24 +498,27 @@ static void change_user(const std::string &user_name) {
                              strerror(errno));
   }
 
+  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO),
+         "Changing to user %d/%s", user_entry->pw_uid, user_name.c_str());
+
   // Change the ownership of the Unix domain socket.
   if (chown(sock_path.c_str(), user_entry->pw_uid, -1) == -1) {
     /* We don't consider a failure here unrecoverable but we do log the fact we
      * could change groups.
      */
-    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING), "%s %s",
-           std::string("Failed to change daemon user: ").c_str(),
-           strerror(errno));
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING),
+           "Failed to change socket user: %s", strerror(errno));
   }
 
-  // Change to the user ourselves.
-  if (setuid(user_entry->pw_uid) == -1) {
+  /* We set the effective user id here so we can later restore our originial
+   * user id to clean up the socket later.
+   */
+  if (seteuid(user_entry->pw_uid) == -1) {
     /* We don't consider a failure here unrecoverable but we do log the fact we
      * could change groups.
      */
-    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING), "%s %s",
-           std::string("Failed to change daemon user: ").c_str(),
-           strerror(errno));
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING),
+           "Failed to change daemon user: %s", strerror(errno));
   }
 }
 
@@ -618,6 +623,8 @@ int main(int argc, char *argv[]) {
   std::clog << "Starting" << std::endl;
 #endif
 
+  uid_t saved_uid = getuid();
+
   try {
     // Possible fork as an independant daemon.
     if (fork_daemon) daemon();
@@ -665,9 +672,19 @@ int main(int argc, char *argv[]) {
   }
 
   // Cleanup.
+  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO), "Cleaning up socket");
   closelog();
   chat_server.close();
-  remove(sock_path.c_str());
+  if (setuid(saved_uid) == -1) {
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
+           "Unable to restore UID: %s", strerror(errno));
+  }
+  if (unlink(sock_path.c_str()) == -1) {
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING),
+           "Failed to clean up socket %s: %s",
+           sock_path.c_str(),
+           strerror(errno));
+  }
 
   return EXIT_SUCCESS;
 }
