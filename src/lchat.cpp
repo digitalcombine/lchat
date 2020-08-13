@@ -46,7 +46,7 @@ static int C_STATUS_OFF = 9;
 
 // Global data.
 static sockets::iostream chatio;
-static std::string sock_path = "/var/lib/lchat/sock";
+static std::string sock_path = STATEDIR "/sock";
 static std::string my_name;
 
 /******************************************************************************

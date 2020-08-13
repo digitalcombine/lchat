@@ -41,6 +41,9 @@ AM_CONDITIONAL([SYSTEMD], [test x$with_systemd = xtrue])
 
 AC_PROG_MKDIR_P
 
+lchatstatedir='${localstatedir}/lib/lchat'
+AC_SUBST(lchatstatedir)
+
 # Checks for programs.
 PKG_PROG_PKG_CONFIG([0.25])
 AC_LANG(C++)

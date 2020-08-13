@@ -40,8 +40,8 @@
 #endif
 
 // Global settings.
-static std::string sock_path = "/var/lib/lchat/sock";
-static std::string cwd_path = "/var/lib/lchat";
+static std::string sock_path = STATEDIR "/sock";
+static std::string cwd_path = STATEDIR;
 static std::string chat_group;
 static std::string chat_user;
 static bool running = true;
