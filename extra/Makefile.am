@@ -1,6 +1,6 @@
 # /lib/systemd/system/
 
-EXTRADIST=lchatd.service.in
+EXTRA_DIST=lchatd.service.in
 systemddata_DATA=lchatd.service
 systemddatadir="/lib/systemd/system"
 
