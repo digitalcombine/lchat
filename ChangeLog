@@ -1,3 +1,17 @@
+Version 1.5.2
+2020-04-26 Ron Wills <ron@digitalcombine.ca>
+
+* Updated documentation.
+* Improved asynchronous IO.
+* Fixed domain socket management.
+* Added reduced privileges.
+
+Version 1.5.1
+2020-04-26 Ron Wills <ron@digitalcombine.ca>
+
+* Fixed new messages being dropped when scroll buffer is full.
+* Updated documentation about badly behaving bot that don't read their input.
+
 Version 1.5
 2020-04-17 Ron Wills <ron@digitalcombine.ca>
 
