@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([lchat], [1.5.1], [ron@digitalcombine.ca])
+AC_INIT([lchat], [1.5.2], [ron@digitalcombine.ca])
 AM_INIT_AUTOMAKE
 AM_SILENT_RULES
 AC_CONFIG_SRCDIR([src/curses.cpp])
@@ -41,6 +41,9 @@ AM_CONDITIONAL([SYSTEMD], [test x$with_systemd = xtrue])
 
 AC_PROG_MKDIR_P
 
+lchatstatedir='${localstatedir}/lib/lchat'
+AC_SUBST(lchatstatedir)
+
 # Checks for programs.
 PKG_PROG_PKG_CONFIG([0.25])
 AC_LANG(C++)
@@ -60,7 +63,6 @@ AC_CHECK_HEADER_STDBOOL
 AC_TYPE_SIZE_T
 
 # Checks for library functions.
-#AC_CHECK_LIB([ncurses], [main])
 AC_CHECK_FUNCS([inet_ntoa memset select socket strerror])
 
 AX_CHECK_COMPILE_FLAG([-std=c++11],

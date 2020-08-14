@@ -1,4 +1,4 @@
-.TH lchat 1 "14 Febuarary 2018" "Version 1.5.1"
+.TH lchat 1 "10 August 2020" "Version 1.5.2"
 
 .SH NAME
 lchat - Local chat console client.
@@ -8,7 +8,7 @@ lchat - Local chat console client.
 [-s \fIpath\fR] [-a] [-l \fIscrollback\fR]
 .PP
 .B lchat
-[-s \fIpath\fR] [-m \fImessage\fR]
+[-s \fIpath\fR] [-m|-m \fImessage\fR]
 .PP
 .B lchat
 [-s \fIpath\fR] [-b \fIbot command\fR]
@@ -33,9 +33,10 @@ are received.
 .IP "-l scrollback"
 Specifies the number of lines to be kept in the scrollback buffer. The default
 is 500 lines.
-.IP "-m message"
+.IP "-m, -m message"
 Send message to the chat room. This allows for scripts and other programs to
-post messages within the chat room.
+post messages within the chat room. If message is excluded from the command line
+then it is read from standard in.
 .IP "-b 'bot command'"
 Instead of bring up a user interface, the chat stream is piped to the \fIbot
 command's\fR standard input and output. The conversation is read through

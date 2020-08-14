@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
 
-function debug() {
+function debug {
     echo "$@" >&2
 }
 
-read -s LINE
-RRES=$?
-
-while [ $RRES == 0 ]; do
+while read LINE; do
 
     debug "Got line \"${LINE}\""
 
@@ -21,12 +18,4 @@ while [ $RRES == 0 ]; do
             echo "/msg ${WHO} Type !fortune if you want hear a fortune"
             ;;
     esac
-
-    read -s LINE
-    RRES=$?
-    while [ $RRES == 0 -a -z "$LINE" ]; do
-        read -s LINE
-        RRES=$?
-    done
-
 done

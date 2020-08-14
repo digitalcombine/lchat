@@ -1,5 +1,5 @@
 /*                                                                  -*- c++ -*-
- * Copyright (c) 2018-2019 Ron R Wills <ron.rwsoft@gmail.com>
+ * Copyright (c) 2018-2020 Ron R Wills <ron.rwsoft@gmail.com>
  *
  * This file is part of the Local Chat Suite.
  *
@@ -35,10 +35,13 @@
 #include <sys/un.h>
 #include <sys/ucred.h>
 #endif
+#ifdef DEBUG
+#include <fcntl.h>
+#endif
 
 // Global settings.
-static std::string sock_path = "/var/lib/lchat/sock";
-static std::string cwd_path = "/var/lib/lchat";
+static std::string sock_path = STATEDIR "/sock";
+static std::string cwd_path = STATEDIR;
 static std::string chat_group;
 static std::string chat_user;
 static bool running = true;
@@ -59,7 +62,6 @@ protected:
   virtual void recv();
 
 private:
-  //bool is_private(const std::string &mesg);
   void send_private(const std::string &who, const std::string &mesg);
 };
 
@@ -104,7 +106,7 @@ void ChatClient::connect(int sockfd) {
   int oval;
 
   if (setsockopt(sockfd, 0, LOCAL_CREDS, &oval, sizeof(oval)) == -1) {
-    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_ERR),
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_ERROR),
            "Unable to determine connected peer: %s", strerror(errno));
 #ifdef DEBUG
     std::cerr << "Unable to determine connected peer: " << stderror(errno)
@@ -133,7 +135,7 @@ void ChatClient::connect(int sockfd) {
   if (getsockopt(sockfd, SOL_SOCKET, SO_PEERCRED,
                  &ucred, (socklen_t *)&len) == -1) {
 #endif
-    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_ERR),
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
            "Unable to determine connected peer: %s", strerror(errno));
     throw sockets::exception(
       std::string("Unable to determine connected peer: ") +
@@ -147,7 +149,7 @@ void ChatClient::connect(int sockfd) {
   struct passwd *pw_entry = getpwuid(ucred.uid);
 #endif
   if (pw_entry == NULL) {
-    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_ERR),
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
            "Unable to determine connected user: %s", strerror(errno));
 #ifdef DEBUG
     std::cerr << "Unable to determine connected peer: " << strerror(errno)
@@ -160,7 +162,7 @@ void ChatClient::connect(int sockfd) {
 
   // Log the connection.
   _name = pw_entry->pw_name;
-  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
+  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO),
          "%s has joined the chat", _name.c_str());
 #ifdef DEBUG
   std::clog << _name << " has joined the chat." << std::endl;
@@ -186,10 +188,7 @@ void ChatClient::connect(int sockfd) {
 void ChatClient::recv() {
   std::string in;
 
-  // Get the command from the client.
-  getline(ios, in);
-
-  if (!in.empty()) {
+  while (getline(ios, in, '\n')) {
 
 #ifdef DEBUG
     std::clog << "From " << _name << ": " << in << std::endl;
@@ -210,7 +209,9 @@ void ChatClient::recv() {
                                               << std::endl;
           }
         }
+        ios.clear();
         this->close();
+        return;
 
       } else if (cmd == "who") {
         std::string result;
@@ -272,6 +273,9 @@ void ChatClient::recv() {
       }
     }
   }
+
+  // ionotready will be thrown, so clear it.
+  ios.clear();
 }
 
 /****************************
@@ -314,6 +318,87 @@ void ChatClient::send_private(const std::string &who, const std::string &mesg) {
   }
 }
 
+/*******************
+ * test_for_server *
+ *******************/
+
+static bool test_for_server() {
+  /*  If a chat server goes down hard, the unix domain socket could have been
+   * left in the filesystem. In this case, when we attempt to create the socket
+   * we will fail to bind to it.
+   *  Here we attempt to connect as a client to see if we can talk to the
+   * chat server. If we can't then we have a dead socket to clean up.
+   */
+  static sockets::iostream chatio;
+
+#ifdef DEBUG
+    std::clog << "Testing for existing chat server" << std::endl;
+#endif
+
+  try {
+    chatio.open(sock_path);
+
+    chatio << "/who" << std::endl;
+  } catch (...) {
+#ifdef DEBUG
+    std::clog << "Failed to talk to server, possible dead socket" << std::endl;
+#endif
+    return false;
+  }
+
+  return true;
+}
+
+/********************
+ * open_unix_socket *
+ ********************/
+
+static void open_unix_socket(bool second_attempt = false) {
+  /*  Here we attempt to create and open the unix domain socket for the chat
+   * server. During hard shutdowns a dead socket could remain on the filesystem
+   * preventing the chat server from starting. So here we make two attempts to
+   * get things rolling. If the first attempt fails, we check for a dead
+   * socket, delete it if necessary then make a second final attempt.
+   */
+
+  try {
+    // Open the unix domain socket.
+    chat_server.open(sock_path);
+
+  } catch (std::exception &err) {
+    // We failed to make the socket and listen on it.
+
+    if (not second_attempt) {
+      syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING), "%s", err.what());
+      syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING), "Attempting to recover");
+#ifdef DEBUG
+      std::cerr << err.what() << "\n Attempting to recover" << std::endl;
+#endif
+    }
+
+    if (not second_attempt and not test_for_server()) {
+      // Looks like we have a dead socket.
+#ifdef DEBUG
+      std::clog << "Dead socket found, " << sock_path << ", cleaning it up"
+                << std::endl;
+#endif
+      syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING),
+             "Dead socket found, %s, cleaning it up",
+             sock_path.c_str());
+
+      // Remove the socket and try to connect again.
+      if (remove(sock_path.c_str()) == -1) {
+        std::cerr << strerror(errno) << std::endl;
+      }
+      open_unix_socket(true);
+
+    } else {
+      // Complete failure to create the server socket.
+      throw;
+    }
+  }
+}
+
 /**********
  * daemon *
  **********/
@@ -321,7 +406,7 @@ void ChatClient::send_private(const std::string &who, const std::string &mesg) {
 static void daemon() {
   pid_t pid, sid;
 
-  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
+  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO),
          "Forking server creating daemon");
 #ifdef DEBUG
   std::clog << "Forking server creating daemon" << std::endl;
@@ -330,7 +415,7 @@ static void daemon() {
   // Fork to create our new process.
   pid = fork();
   if (pid < 0) {
-    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING),
            "Failed to fork: %s", strerror(errno));
 #ifdef DEBUG
     std::cerr << "Failed to fork: " << strerror(errno) << std::endl;
@@ -379,6 +464,9 @@ static void change_group(const std::string &group_name) {
                              strerror(errno));
   }
 
+  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO),
+         "Changing to group %d/%s", group_entry->gr_gid, group_name.c_str());
+
   // Change the group ownership of the Unix domain socket.
   if (chown(sock_path.c_str(), -1, group_entry->gr_gid) == -1) {
     throw std::runtime_error(std::string("Failed to change socket group: ") +
@@ -390,9 +478,8 @@ static void change_group(const std::string &group_name) {
     /* We don't consider a failure here unrecoverable but we do log the fact we
      * could change groups.
      */
-    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING), "%s %s",
-           std::string("Failed to change daemon group: ").c_str(),
-           strerror(errno));
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING),
+           "Failed to change daemon group: %s", strerror(errno));
   }
 }
 
@@ -411,24 +498,27 @@ static void change_user(const std::string &user_name) {
                              strerror(errno));
   }
 
+  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO),
+         "Changing to user %d/%s", user_entry->pw_uid, user_name.c_str());
+
   // Change the ownership of the Unix domain socket.
   if (chown(sock_path.c_str(), user_entry->pw_uid, -1) == -1) {
     /* We don't consider a failure here unrecoverable but we do log the fact we
      * could change groups.
      */
-    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING), "%s %s",
-           std::string("Failed to change daemon user: ").c_str(),
-           strerror(errno));
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING),
+           "Failed to change socket user: %s", strerror(errno));
   }
 
-  // Change to the user ourselves.
-  if (setuid(user_entry->pw_uid) == -1) {
+  /* We set the effective user id here so we can later restore our originial
+   * user id to clean up the socket later.
+   */
+  if (seteuid(user_entry->pw_uid) == -1) {
     /* We don't consider a failure here unrecoverable but we do log the fact we
      * could change groups.
      */
-    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING), "%s %s",
-           std::string("Failed to change daemon user: ").c_str(),
-           strerror(errno));
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING),
+           "Failed to change daemon user: %s", strerror(errno));
   }
 }
 
@@ -446,7 +536,7 @@ static void sig_handler(int signum) {
   case SIGHUP:
   case SIGTERM:
   case SIGINT:
-    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO),
            "Interrupt signal, shutting down");
 #ifdef DEBUG
     std::clog << "Interrupt signal, shutting down" << std::endl;
@@ -475,7 +565,7 @@ static void version() {
 
 static void help() {
   std::cout << "Local Chat Dispatcher v" VERSION << "\n"
-            << "  lchatd [-d] [-s path] [-g group] [-w path]\n"
+            << "  lchatd [-d] [-s path] [-u user] [-g group] [-w path]\n"
             << "  lchatd -V\n"
             << "  lchatd -h|-?\n\n"
             << "Copyright © 2018-2019 Ron R Wills <ron@digitalcombine.ca>.\n"
@@ -520,6 +610,7 @@ int main(int argc, char *argv[]) {
       break;
     default:
       std::cerr << "Unknown option -" << (char)optopt << std::endl;
+      help();
       return EXIT_FAILURE;
     }
   }
@@ -532,13 +623,14 @@ int main(int argc, char *argv[]) {
   std::clog << "Starting" << std::endl;
 #endif
 
+  uid_t saved_uid = getuid();
+
   try {
     // Possible fork as an independant daemon.
     if (fork_daemon) daemon();
     else umask(0117);
 
-    // Open the Unix domain socket.
-    chat_server.open(sock_path);
+    open_unix_socket();
 
     // Change the group of the socket and of us.
     if (not chat_group.empty())
@@ -553,7 +645,6 @@ int main(int argc, char *argv[]) {
     }
 
   } catch (std::exception &err) {
-    remove(sock_path.c_str());
     syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_ERR), "%s", err.what());
 #ifdef DEBUG
     std::cerr << err.what() << std::endl;
@@ -569,7 +660,7 @@ int main(int argc, char *argv[]) {
   signal(SIGPIPE, SIG_IGN);
 
   // Log the fact we're up and runnging.
-  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
+  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO),
          "Local chat listening on socket %s", sock_path.c_str());
 #ifdef DEBUG
   std::clog << "Local chat listening on socket " << sock_path << std::endl;
@@ -581,9 +672,19 @@ int main(int argc, char *argv[]) {
   }
 
   // Cleanup.
+  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO), "Cleaning up socket");
   closelog();
   chat_server.close();
-  remove(sock_path.c_str());
+  if (setuid(saved_uid) == -1) {
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
+           "Unable to restore UID: %s", strerror(errno));
+  }
+  if (unlink(sock_path.c_str()) == -1) {
+    syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING),
+           "Failed to clean up socket %s: %s",
+           sock_path.c_str(),
+           strerror(errno));
+  }
 
   return EXIT_SUCCESS;
 }

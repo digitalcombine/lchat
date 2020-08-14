@@ -46,7 +46,7 @@ static int C_STATUS_OFF = 9;
 
 // Global data.
 static sockets::iostream chatio;
-static std::string sock_path = "/var/lib/lchat/sock";
+static std::string sock_path = STATEDIR "/sock";
 static std::string my_name;
 
 /******************************************************************************
@@ -243,7 +243,7 @@ void chat::scroll(scroll_t value) {
     if (_buffer_location > _scroll_buffer.size() - h)
       _buffer_location = _scroll_buffer.size() - h;
 
-    if (h > _scroll_buffer.size())
+    if (h > (int)_scroll_buffer.size())
       _buffer_location = 0;
   }
 
@@ -761,7 +761,7 @@ static void version() {
 static void help() {
   std::cout << "Local Chat v" VERSION << "\n"
             << "  lchat [-s path] [-a] [-l scrollback lines]\n"
-            << "  lchat [-s path] [-m message]\n"
+            << "  lchat [-s path] [-m|-m message]\n"
             << "  lchat [-s path] [-b bot command]\n"
             << "  lchat -V\n"
             << "  lchat -h|-?\n\n"
@@ -799,7 +799,7 @@ static void send_message(const std::string &line) {
 #ifdef DEBUG
       std::clog << "< " << in << std::endl;
 #endif
-    } catch (sockets::ionotready) {
+    } catch (sockets::ionotready &err) {
       // Nothing ready from the dispatcher, we're done here.
       chatio.clear();
       usleep(100);
@@ -832,7 +832,7 @@ static void quit_chat() {
       std::clog << "< " << line << std::endl;
 #endif
 
-    } catch (sockets::ionotready) {
+    } catch (sockets::ionotready &err) {
       // Nothing ready from the dispatcher.
       chatio.clear();
       usleep(100);
@@ -856,7 +856,6 @@ static int bot(const std::string &command) {
       dup2(chatio.socket(), STDOUT_FILENO);
 
       // Execute the bot command.
-      //exit(system(command.c_str()));
       execlp("sh", "sh", "-c", command.c_str(), NULL);
       break; // Stops compiler warnings.
     case -1:
@@ -883,7 +882,7 @@ int main(int argc, char *argv[]) {
 
   // Get the command line arguments.
   int opt;
-  while ((opt = getopt(argc, argv, ":as:l:b:m:hV")) != -1) {
+  while ((opt = getopt(argc, argv, ":as:l:b:m:hV?")) != -1) {
     switch (opt) {
     case 'a':
       chat::auto_scroll = true;
@@ -891,6 +890,7 @@ int main(int argc, char *argv[]) {
     case 'b':
       bot_command = optarg;
       break;
+    case '?':
     case 'h':
       help();
       return EXIT_SUCCESS;
@@ -942,7 +942,6 @@ int main(int argc, char *argv[]) {
   try {
     chatio.open(sock_path);
     chatio >> sockets::nonblock;
-    chatio >> sockets::recvattempts(1);
   } catch (std::exception &err) {
     std::cerr << err.what() << std::endl;
     return EXIT_FAILURE;
