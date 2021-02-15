@@ -34,6 +34,11 @@
 #include <sys/types.h>
 #include <sys/un.h>
 #include <sys/ucred.h>
+
+#ifndef LOG_ERROR
+#define LOG_ERROR LOG_ERR
+#endif
+
 #endif
 #ifdef DEBUG
 #include <fcntl.h>

@@ -69,6 +69,12 @@ AX_CHECK_COMPILE_FLAG([-std=c++11],
       [AX_APPEND_FLAG([-std=c++11], CXXFLAGS)],
       AC_MSG_ERROR(C++11 not supported by compiler))
 
+case $host_os in
+  freebsd*)
+    AM_CONDITIONAL([FREEBSD], [test x = x])
+    ;;
+esac
+
 AC_CONFIG_FILES([Makefile
                  include/Makefile
                  src/Makefile

@@ -1,6 +1,11 @@
 # /lib/systemd/system/
 
-EXTRA_DIST=lchatd.service.in
+EXTRA_DIST=lchatd lchatd.service.in
+
+if FREEBSD
+rcdata_DATA=lchatd
+rcdatadir=${prefix}/etc/rc.d
+endif
 
 if SYSTEMD
 # If systemd was enabled in configure
