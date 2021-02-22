@@ -5,7 +5,8 @@
 name=lchatd
 rcvar=lchatd_enable
 
-command="/usr/sbin/${name}"
+command="/usr/local/sbin/${name}"
+command_args="-d"
 
 load_rc_config $name
 run_rc_command "$1"
