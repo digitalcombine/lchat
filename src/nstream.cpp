@@ -31,7 +31,7 @@
 #include <fcntl.h>
 #include <cstdio>
 
-//#define DEBUG_NSTREAM 1
+#define DEBUG_NSTREAM 1
 #ifdef DEBUG_NSTREAM
 #include <iostream>
 #endif
