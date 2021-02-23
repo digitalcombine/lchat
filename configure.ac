@@ -69,6 +69,7 @@ AX_CHECK_COMPILE_FLAG([-std=c++11],
       [AX_APPEND_FLAG([-std=c++11], CXXFLAGS)],
       AC_MSG_ERROR(C++11 not supported by compiler))
 
+AM_CONDITIONAL([FREEBSD], [test x = y])
 case $host_os in
   freebsd*)
     AM_CONDITIONAL([FREEBSD], [test x = x])
