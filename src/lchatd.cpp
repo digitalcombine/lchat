@@ -34,6 +34,11 @@
 #include <sys/types.h>
 #include <sys/un.h>
 #include <sys/ucred.h>
+
+#ifndef LOG_ERROR
+#define LOG_ERROR LOG_ERR
+#endif
+
 #endif
 #ifdef DEBUG
 #include <fcntl.h>
@@ -109,7 +114,7 @@ void ChatClient::connect(int sockfd) {
     syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_ERROR),
            "Unable to determine connected peer: %s", strerror(errno));
 #ifdef DEBUG
-    std::cerr << "Unable to determine connected peer: " << stderror(errno)
+    std::cerr << "Unable to determine connected peer: " << strerror(errno)
               << std::endl;
 #endif
     throw sockets::exception(
@@ -187,6 +192,10 @@ void ChatClient::connect(int sockfd) {
 
 void ChatClient::recv() {
   std::string in;
+
+#ifdef DEBUG
+  std::clog << "Client recv from " << _name << std::endl;
+#endif
 
   while (getline(ios, in, '\n')) {
 
@@ -274,8 +283,18 @@ void ChatClient::recv() {
     }
   }
 
-  // ionotready will be thrown, so clear it.
-  ios.clear();
+  if (ios.eof()) {
+    // If the socket closed from the client side.
+#ifdef DEBUG
+    std::clog << "Client closed the socket" << std::endl;
+#endif
+    this->close();
+    return;
+
+  } else {
+    // ionotready will be thrown, so clear it.
+    ios.clear();
+  }
 }
 
 /****************************

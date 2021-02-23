@@ -155,7 +155,7 @@ namespace sockets {
     virtual std::ostream &operator()(std::ostream &is) const = 0;
 
   protected:
-    Ty &arg;
+    Ty arg;
   };
 
   template <class Ty>
@@ -166,7 +166,7 @@ namespace sockets {
     virtual std::istream &operator()(std::istream &is) const = 0;
 
   protected:
-    Ty &arg;
+    Ty arg;
   };
 
   /****************************************************************************

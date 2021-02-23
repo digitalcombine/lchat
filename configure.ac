@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([lchat], [1.5.2], [ron@digitalcombine.ca])
+AC_INIT([lchat], [1.5.3], [ron@digitalcombine.ca])
 AM_INIT_AUTOMAKE
 AM_SILENT_RULES
 AC_CONFIG_SRCDIR([src/curses.cpp])
@@ -68,6 +68,12 @@ AC_CHECK_FUNCS([inet_ntoa memset select socket strerror])
 AX_CHECK_COMPILE_FLAG([-std=c++11],
       [AX_APPEND_FLAG([-std=c++11], CXXFLAGS)],
       AC_MSG_ERROR(C++11 not supported by compiler))
+
+case $host_os in
+  freebsd*)
+    AM_CONDITIONAL([FREEBSD], [test x = x])
+    ;;
+esac
 
 AC_CONFIG_FILES([Makefile
                  include/Makefile
