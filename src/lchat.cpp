@@ -525,6 +525,8 @@ void input::key_event(int ch) {
     break;
 
   case KEY_BACKSPACE:
+  case '\b':
+  case '\x7f':
     if (not _line.empty() and _insert > 0) {
       _line.erase(_insert - 1, 1);
       _insert--;
