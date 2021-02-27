@@ -739,7 +739,7 @@ void lchat::_draw() {
   *this << curs::cursor((w - title.size()) / 2, 0) << title
         << curs::attroff(curs::palette::pair(C_TITLE) | A_BOLD)
         << curs::cursor(w - (_userlist_width + 1), 1)
-        << curs::vline(h - 3, ACS_VLINE)
+        << curs::vline(h - 3, '|')
         << std::flush;
 }
 
