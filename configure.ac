@@ -73,6 +73,11 @@ AM_CONDITIONAL([FREEBSD], [test x = y])
 case $host_os in
   freebsd*)
     AM_CONDITIONAL([FREEBSD], [test x = x])
+    # Package configure sometimes only links to ncurses instead of
+    # ncursesw. This fixes that.
+    AC_CHECK_LIB(ncursesw, main,
+    	         [CURSES_LIBS=$(echo $CURSES_LIBS | \
+		                sed 's/-lncurses/-lncursesw/')])
     ;;
 esac
 
