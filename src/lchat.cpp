@@ -180,7 +180,6 @@ private:
   input _input;
 
   int _userlist_width;
-  bool _refresh_users;
   userlist _userlist;
 
   status _status;
@@ -615,7 +614,6 @@ lchat::lchat()
   _chat(*this, 0, 1, width()  - (12), height() - 3),
   _input(*this, 0, height() - 1, width(), 1),
   _userlist_width(11),
-  _refresh_users(true),
   _userlist(width() - 11, 1, 11, height() - 3),
   _status(_chat, _userlist, 0, height() - 2, width(), 1) {
 
