@@ -1,12 +1,19 @@
 #!/bin/sh
+#
+# PROVIDE: lchatd
+# REQUIRE: DAEMON
+#
 
 . /etc/rc.subr
 
-name=lchatd
+name="lchatd"
 rcvar=lchatd_enable
 
 command="/usr/local/sbin/${name}"
 command_args="-d"
 
 load_rc_config $name
+
+: ${lchatd_enable="NO"}
+
 run_rc_command "$1"

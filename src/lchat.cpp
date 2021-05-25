@@ -170,6 +170,8 @@ public:
 
   void operator()();
 
+  friend class input;
+
 private:
   void resize_event();
 
@@ -178,7 +180,6 @@ private:
   input _input;
 
   int _userlist_width;
-  bool _refresh_users;
   userlist _userlist;
 
   status _status;
@@ -524,6 +525,10 @@ void input::key_event(int ch) {
     chat::auto_scroll = not chat::auto_scroll;
     break;
 
+  case CTRL('r'):
+    _lchat->resize_event();
+    break;
+
   case KEY_BACKSPACE:
   case '\b':
   case '\x7f':
@@ -609,7 +614,6 @@ lchat::lchat()
   _chat(*this, 0, 1, width()  - (12), height() - 3),
   _input(*this, 0, height() - 1, width(), 1),
   _userlist_width(11),
-  _refresh_users(true),
   _userlist(width() - 11, 1, 11, height() - 3),
   _status(_chat, _userlist, 0, height() - 2, width(), 1) {
 
@@ -739,7 +743,7 @@ void lchat::_draw() {
   *this << curs::cursor((w - title.size()) / 2, 0) << title
         << curs::attroff(curs::palette::pair(C_TITLE) | A_BOLD)
         << curs::cursor(w - (_userlist_width + 1), 1)
-        << curs::vline(h - 3, '|')
+        << curs::vline(h - 3)
         << std::flush;
 }
 

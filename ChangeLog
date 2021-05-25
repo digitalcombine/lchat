@@ -1,3 +1,15 @@
+Version 1.5.4
+2021-02-27 Ron Wills <ron@digitalcombine.ca>
+
+* Changed ACS_VLINE with the '|' character
+* Backspace fix
+* Removed debugging output
+
+Version 1.5.3
+2021-02-23 Ron Wills <ron@digitalcombine.ca>
+
+* Fixed run away server when client disconnects unexpectedly.
+
 Version 1.5.2
 2020-04-26 Ron Wills <ron@digitalcombine.ca>
 

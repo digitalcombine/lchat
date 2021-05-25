@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([lchat], [1.5.4], [ron@digitalcombine.ca])
+AC_INIT([lchat], [1.5.5], [ron@digitalcombine.ca])
 AM_INIT_AUTOMAKE
 AM_SILENT_RULES
 AC_CONFIG_SRCDIR([src/curses.cpp])
@@ -73,6 +73,11 @@ AM_CONDITIONAL([FREEBSD], [test x = y])
 case $host_os in
   freebsd*)
     AM_CONDITIONAL([FREEBSD], [test x = x])
+    # Package configure sometimes only links to ncurses instead of
+    # ncursesw. This fixes that.
+    AC_CHECK_LIB(ncursesw, main,
+    	         [CURSES_LIBS=$(echo $CURSES_LIBS | \
+		                sed 's/-lncurses/-lncursesw/')])
     ;;
 esac
 
