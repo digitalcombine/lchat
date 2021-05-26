@@ -1,21 +1,34 @@
 /*                                                                  -*- c++ -*-
- * Copyright (c) 2018-2020 Ron R Wills <ron.rwsoft@gmail.com>
+ * Copyright © 2018-2021 Ron R Wills <ron@digitalcombine.ca>
  *
- * This file is part of the Local Chat Suite.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
  *
- * Local Chat is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
  *
- * Meat is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * 2. Redistributions in binary form must reproduce the above
+ *    copyright notice, this list of conditions and the following
+ *    disclaimer in the documentation and/or other materials provided
+ *    with the distribution.
  *
- * You should have received a copy of the GNU General Public License
- * along with the Local Chat Suite.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+ * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include "nstream"
@@ -48,6 +61,8 @@ static int C_STATUS_OFF = 9;
 static sockets::iostream chatio;
 static std::string sock_path = STATEDIR "/sock";
 static std::string my_name;
+
+static curs::cchar bgstatus(C_STATUS, U' ');
 
 /******************************************************************************
  */
@@ -350,44 +365,44 @@ void chat::draw(const std::string &line) {
   if (line.compare(0, 2, "? ") == 0) {
     // Help message.
     *this << '\n'
-          << curs::attron(curs::palette::pair(C_HLPMSG) | A_BOLD)
+          << curs::attron(curs::colors::pair(C_HLPMSG) | A_BOLD)
           << line.substr(2, line.length() - 2)
-          << curs::attroff(curs::palette::pair(C_HLPMSG) | A_BOLD);
+          << curs::attroff(curs::colors::pair(C_HLPMSG) | A_BOLD);
 
   } else if (line.compare(0, 2, "! ") == 0) {
     // Private message.
     *this << '\n'
-          << curs::attron(curs::palette::pair(C_USERNAME))
+          << curs::attron(curs::colors::pair(C_USERNAME))
           << line.substr(2, pos - 1)
-          << curs::attroff(curs::palette::pair(C_USERNAME))
-          << curs::attron(curs::palette::pair(C_PRVMSG) | A_BOLD)
+          << curs::attroff(curs::colors::pair(C_USERNAME))
+          << curs::attron(curs::colors::pair(C_PRVMSG) | A_BOLD)
           << line.substr(pos + 1, line.length() - pos - 1)
-          << curs::attroff(curs::palette::pair(C_PRVMSG) | A_BOLD);
+          << curs::attroff(curs::colors::pair(C_PRVMSG) | A_BOLD);
 
   } else if (line.compare(0, my_name.length() + 1, my_name + ":") == 0) {
     // A message that was sent by this user.
     *this << '\n'
-          << curs::attron(curs::palette::pair(C_USERNAME))
+          << curs::attron(curs::colors::pair(C_USERNAME))
           << line.substr(0, pos + 1)
-          << curs::attroff(curs::palette::pair(C_USERNAME))
-          << curs::attron(curs::palette::pair(C_MYMESSAGE))
+          << curs::attroff(curs::colors::pair(C_USERNAME))
+          << curs::attron(curs::colors::pair(C_MYMESSAGE))
           << line.substr(pos + 1, line.length() - pos)
-          << curs::attroff(curs::palette::pair(C_MYMESSAGE));
+          << curs::attroff(curs::colors::pair(C_MYMESSAGE));
 
   } else if (pos != line.npos) {
     // Color the senders name.
     *this << '\n'
-          << curs::attron(curs::palette::pair(C_USERNAME))
+          << curs::attron(curs::colors::pair(C_USERNAME))
           << line.substr(0, pos + 1)
-          << curs::attroff(curs::palette::pair(C_USERNAME))
+          << curs::attroff(curs::colors::pair(C_USERNAME))
           << line.substr(pos + 1, line.length() - pos);
 
   } else {
     // System message.
     *this << '\n'
-          << curs::attron(curs::palette::pair(C_SYSMSG))
+          << curs::attron(curs::colors::pair(C_SYSMSG))
           << line
-          << curs::attroff(curs::palette::pair(C_SYSMSG));
+          << curs::attroff(curs::colors::pair(C_SYSMSG));
   }
 }
 
@@ -449,8 +464,8 @@ status::status(chat &ch, userlist &ul, int x, int y, int width, int height)
 }
 
 void status::redraw() {
-  *this << curs::attron(curs::palette::pair(C_STATUS))
-        << curs::bkgd(' ', curs::palette::pair(C_STATUS))
+  *this << curs::attron(curs::colors::pair(C_STATUS))
+        << curs::bkgrnd(bgstatus) //, curs::colors::pair(C_STATUS))
         << curs::cursor(0, 0) << curs::erase;
 
   std::ostringstream msg;
@@ -621,21 +636,21 @@ lchat::lchat()
   *this << curs::keypad(true);
 
   // Configure the color theme.
-  curs::palette::start();
-  if (curs::palette::has_colors()) {
-    curs::palette::pair(C_TITLE, curs::palette::WHITE,
-                        curs::palette::BLUE);
-    curs::palette::pair(C_USERNAME, curs::palette::CYAN, -1);
-    curs::palette::pair(C_MYMESSAGE, curs::palette::GREEN, -1);
-    curs::palette::pair(C_HLPMSG, curs::palette::CYAN, -1);
-    curs::palette::pair(C_SYSMSG, curs::palette::BLUE, -1);
-    curs::palette::pair(C_PRVMSG, curs::palette::YELLOW, -1);
-    curs::palette::pair(C_STATUS, curs::palette::WHITE,
-                        curs::palette::BLUE);
-    curs::palette::pair(C_STATUS_ON, curs::palette::YELLOW,
-                        curs::palette::BLUE);
-    curs::palette::pair(C_STATUS_OFF, curs::palette::RED,
-                        curs::palette::BLUE);
+  curs::colors::start();
+  if (curs::colors::have()) {
+    curs::colors::pair(C_TITLE, curs::colors::WHITE,
+                        curs::colors::BLUE);
+    curs::colors::pair(C_USERNAME, curs::colors::CYAN, -1);
+    curs::colors::pair(C_MYMESSAGE, curs::colors::GREEN, -1);
+    curs::colors::pair(C_HLPMSG, curs::colors::CYAN, -1);
+    curs::colors::pair(C_SYSMSG, curs::colors::BLUE, -1);
+    curs::colors::pair(C_PRVMSG, curs::colors::YELLOW, -1);
+    curs::colors::pair(C_STATUS, curs::colors::WHITE,
+                        curs::colors::BLUE);
+    curs::colors::pair(C_STATUS_ON, curs::colors::YELLOW,
+                        curs::colors::BLUE);
+    curs::colors::pair(C_STATUS_OFF, curs::colors::RED,
+                        curs::colors::BLUE);
   }
 
   _draw();
@@ -737,11 +752,11 @@ void lchat::_draw() {
   size(w, h);
 
   // Draw the frames around our windows.
-  *this << curs::attron(curs::palette::pair(C_TITLE) | A_BOLD)
+  *this << curs::attron(curs::colors::pair(C_TITLE) | A_BOLD)
         << curs::cursor(0, 0) << "📡" << std::string(w - 1, ' ');
   std::string title("Local Chat v" VERSION);
   *this << curs::cursor((w - title.size()) / 2, 0) << title
-        << curs::attroff(curs::palette::pair(C_TITLE) | A_BOLD)
+        << curs::attroff(curs::colors::pair(C_TITLE) | A_BOLD)
         << curs::cursor(w - (_userlist_width + 1), 1)
         << curs::vline(h - 3)
         << std::flush;
@@ -980,25 +995,22 @@ int main(int argc, char *argv[]) {
   } else {
     // Interactive user interface.
 
-    // Setup the terminal.
-    curs::terminal::initialize();
-    curs::terminal::cbreak(true);
-    curs::terminal::echo(false);
-    curs::terminal::halfdelay(10);
-
     try {
+      // Setup the terminal.
+      curs::terminal terminal;
+
+      terminal.cbreak(true);
+      terminal.echo(false);
+      terminal.halfdelay(10);
+
       lchat chat_ui;
       chatio << "/who" << std::endl;
 
       chat_ui();
     } catch (std::exception &err) {
-      curs::terminal::restore();
       std::cerr << err.what() << std::endl;
       return EXIT_FAILURE;
     }
-
-    // Restore the terminal.
-    curs::terminal::restore();
   }
 
   return EXIT_SUCCESS;

@@ -1,21 +1,34 @@
 /*                                                                  -*- c++ -*-
- * Copyright © 2019 Ron R Wills <ron@digitalcombine.ca>
+ * Copyright © 2019-2021 Ron R Wills <ron@digitalcombine.ca>
  *
- * This file is part of the Local Chat Suite.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
  *
- * Local Chat is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
  *
- * Meat is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * 2. Redistributions in binary form must reproduce the above
+ *    copyright notice, this list of conditions and the following
+ *    disclaimer in the documentation and/or other materials provided
+ *    with the distribution.
  *
- * You should have received a copy of the GNU General Public License
- * along with the Local Chat Suite.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+ * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include <_p_curses>
@@ -24,22 +37,19 @@
 #include <vector>
 #include <signal.h>
 
-#ifndef _CPPCURSES_H
-#define _CPPCURSES_H
+#define CURS_VERSION VERSION
+
+#pragma once
 
 namespace curs {
 
-  /***************************************************************************
+  /**
    */
-
   class terminal {
   public:
-    static bool isatty();
-
-    static void initialize();
-
-    static void restore() noexcept;
-
+    /** Return the terminal type for the currently set terminal.
+     * @see set
+     */
     static std::string type();
 
     static void clear();
@@ -54,23 +64,55 @@ namespace curs {
 
     static int halfdelay(int time) { return ::halfdelay(time); }
 
-    static void cursor(bool value);
+    static void cursor(bool show);
 
     static int getch() { return ::getch(); }
+
+    static void filter() { ::filter(); }
+
+    static void flash() { ::flash(); }
+
+    static void beep() { ::beep(); }
+
+    /** Setup the default terminal using curses initscr. The environment
+     * variable TERM is used to determine the terminals type.
+     */
+    terminal();
+
+    /** Setup a terminal using the given file descriptors as the terminals
+     * input and output. The environment variable TERM is used to determine
+     * the terminals type.
+     * @param outfd The terminals output file descriptor.
+     * @param infd The terminals input file descriptor.
+     * @{
+     */
+    terminal(int outfd, int infd);
+    terminal(FILE *outfile, FILE *infile);
+    terminal(const std::string &term, int outfd, int infd);
+    terminal(const std::string &term, FILE *outfile, FILE *infile);
+    /** @} */
+
+    /** Reset and clean up the terminal.
+     */
+    virtual ~terminal() noexcept;
+
+    /** Set the current terminal to this terminal.
+     */
+    void set() const;
+
+  private:
+    SCREEN *screen;
   };
 
-  /***************************************************************************
-   * Curses Window Stream Buffer
-   *  This create a stream buffer that writes to a curses window.
+  /** A stream buffer that writes to a curses window.
    */
-
   class windowbuf : public std::streambuf {
   public:
     windowbuf(WINDOW *win, bool free_window = false, size_t buffer = 2048);
     windowbuf(const windowbuf &other) = delete;
     virtual ~windowbuf() noexcept;
 
-    WINDOW *window() const { return _window; };
+    WINDOW *window() const { return _window; }
 
   protected:
     virtual int_type overflow(int_type ch);
@@ -86,17 +128,15 @@ namespace curs {
     bool oflush();
   };
 
-  /***************************************************************************
-   * Curses Pad Stream Buffer
-   *  This create a stream buffer that writes to a curses window.
+  /** A stream buffer that writes to a curses pad.
    */
-
   class padbuf : public std::streambuf {
   public:
+    padbuf(WINDOW *win, int x, int y, int width, int height, size_t buffer = 2048);
     padbuf(int width, int height, size_t buffer = 2048);
     virtual ~padbuf() noexcept;
 
-    WINDOW *window() const { return _pad; };
+    WINDOW *window() const { return _pad; }
 
   protected:
     virtual int_type overflow(int_type ch);
@@ -105,7 +145,7 @@ namespace curs {
   private:
     WINDOW *_pad;
 
-    int x, y;
+    int _x, _y;
     int dest_x, dest_y, dest_width, dest_height;
 
     std::vector<char> _obuf;
@@ -113,18 +153,19 @@ namespace curs {
     bool oflush();
   };
 
-  /***************************************************************************
+  /** The base output stream type for curses windows.
    */
-
-  class window : public std::ostream {
+  class base_ostream : public std::ostream {
   public:
-    window();
-    window(int x, int y, int width, int height);
-    window(const window &parent, int x, int y, int width, int height);
-    window(const window &other) = delete;
-    virtual ~window() noexcept;
+    explicit base_ostream(std::streambuf* sb) : std::ostream(sb) {}
+    virtual ~base_ostream() noexcept;
 
+    /** Return the position of the cursor.
+     */
     void cursor(int &x, int &y) const;
+
+    /** Return the size of the curses window.
+     */
     void size(int &width, int &height) const;
     void position(int &x, int &y) const;
     int width() const;
@@ -132,7 +173,7 @@ namespace curs {
     int x() const;
     int y() const;
 
-    operator WINDOW *() const { return _windowbuf.window(); }
+    virtual operator WINDOW *() const = 0;
 
     friend std::ostream &clear(std::ostream &os);
     friend std::ostream &erase(std::ostream &os);
@@ -140,15 +181,24 @@ namespace curs {
     friend std::ostream &clrtoeol(std::ostream &os);
     friend std::ostream &touch(std::ostream &os);
     friend std::ostream &noutrefresh(std::ostream &os);
+    friend std::ostream &cursyncup(std::ostream &os);
+    friend std::ostream &syncdown(std::ostream &os);
+    friend std::ostream &syncup(std::ostream &os);
     friend std::ostream &resize(std::ostream &os);
     friend class keypad;
     friend class nodelay;
     friend class scrollok;
     friend class leaveok;
+    friend class idlok;
+    friend class syncok;
+    friend class setscrreg;
     friend class attron;
     friend class attroff;
     friend class attrset;
-    friend class bkgd;
+    friend class pairon;
+    friend class pairoff;
+    friend class bkgrnd;
+    friend class bkgrndset;
     friend class cursor;
     friend class hline;
     friend class vline;
@@ -158,16 +208,81 @@ namespace curs {
     friend class move;
 
   private:
-    window *_parent;
+    virtual void noutrefresh() const = 0;
+    virtual void refresh() const = 0;
+  };
+
+  /**
+   */
+  class window : public base_ostream {
+  public:
+    window();
+    window(int x, int y, int width, int height);
+    window(const window &parent, int x, int y, int width, int height);
+    window(const window &other) = delete;
+    virtual ~window() noexcept;
+
+    virtual operator WINDOW *() const;
+
+  private:
+    //window *_parent;
     windowbuf _windowbuf;
+
+    virtual void noutrefresh() const;
+    virtual void refresh() const;
+  };
+
+  /**
+   */
+  class pad : public base_ostream {
+  public:
+    pad(int width, int height);
+    pad(const base_ostream &parent, int x, int y, int width, int height);
+    pad(const pad &other) = delete;
+    virtual ~pad() noexcept;
+
+    virtual operator WINDOW *() const;
+
+  private:
+    //window *_parent;
+    padbuf _padbuf;
+
+    virtual void noutrefresh() const;
+    virtual void refresh() const;
   };
 
   /***************************************************************************
    * Window IO Manipulators
    */
 
+  class cchar {
+  public:
+    cchar(wchar_t ch);
+    cchar(short color_pair, wchar_t ch);
+#ifdef HAVE_NCURSESW_H
+    cchar(const cchar_t *ch);
+#else
+    cchar(chtype ch);
+#endif
+    cchar(const cchar &other);
+
+#ifdef HAVE_NCURSESW_H
+    operator const cchar_t *() const { return &_character; }
+#else
+    operator chtype () const { return _character; }
+#endif
+
+  private:
+#ifdef HAVE_NCURSESW_H
+    cchar_t _character;
+#else
+    chtype _character;
+#endif
+  };
+
   class osmanip {
   public:
+    virtual ~osmanip() noexcept;
     virtual std::ostream &operator()(std::ostream &os) const = 0;
   };
 
@@ -176,6 +291,9 @@ namespace curs {
   std::ostream &clrtobot(std::ostream &os);
   std::ostream &clrtoeol(std::ostream &os);
   std::ostream &touch(std::ostream &os);
+  std::ostream &cursyncup(std::ostream &os);
+  std::ostream &syncdown(std::ostream &os);
+  std::ostream &syncup(std::ostream &os);
   std::ostream &noutrefresh(std::ostream &os);
 
   class keypad : public osmanip {
@@ -210,6 +328,30 @@ namespace curs {
     bool _value;
   };
 
+  class idlok : public osmanip {
+  public:
+    explicit idlok(bool value) : _value(value) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+  private:
+    bool _value;
+  };
+
+  class syncok : public osmanip {
+  public:
+    explicit syncok(bool value) : _value(value) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+  private:
+    bool _value;
+  };
+
+  class setscrreg : public osmanip {
+  public:
+    explicit setscrreg(int top, int bottom) : _top(top), _bottom(bottom) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+  private:
+    int _top, _bottom;
+  };
+
   class attron : public osmanip {
   public:
     explicit attron(int attr) : _attr(attr) {}
@@ -234,14 +376,46 @@ namespace curs {
     int _attr;
   };
 
-  class bkgd : public osmanip {
+  class pairon : public osmanip {
   public:
-    explicit bkgd(wchar_t ch) : _attr(0), _character(ch) {}
-    explicit bkgd(wchar_t ch, attr_t attr) : _attr(attr), _character(ch) {}
+    explicit pairon(short color_pair) : _color_pair(color_pair) {}
     virtual std::ostream &operator()(std::ostream &os) const;
   private:
-    attr_t  _attr;
-    wchar_t _character;
+    short _color_pair;
+  };
+
+  class pairoff : public osmanip {
+  public:
+    explicit pairoff(short color_pair) : _color_pair(color_pair) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+  private:
+    short _color_pair;
+  };
+
+  class bkgrnd : public osmanip {
+  public:
+    explicit bkgrnd(const cchar &character) :  _character(character) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+
+  private:
+#ifdef HAVE_NCURSESW_H
+    const cchar_t *_character;
+#else
+    chtype _chacacter;
+#endif
+  };
+
+  class bkgrndset : public osmanip {
+  public:
+    explicit bkgrndset(const cchar &character) :  _character(character) {}
+    virtual std::ostream &operator()(std::ostream &os) const;
+
+  private:
+#ifdef HAVE_NCURSESW_H
+    const cchar_t *_character;
+#else
+    chtype _chacacter;
+#endif
   };
 
   class cursor : public osmanip {
@@ -257,42 +431,61 @@ namespace curs {
 
   class hline : public osmanip {
   public:
-    explicit hline(int length, chtype character = 0)
+    explicit hline(int length) : _move(false), _character(nullptr),
+                                 _length(length) {}
+    explicit hline(int length, const cchar &character)
       : _character(character), _length(length) {}
+    explicit hline(int x, int y, int length)
+      : _move(true), _x(x), _y(y), _character(nullptr), _length(length) {}
+    explicit hline(int x, int y, int length, const cchar &character)
+      : _move(true), _x(x), _y(y), _character(character), _length(length) {}
     virtual std::ostream &operator()(std::ostream &os) const;
   private:
-    chtype _character;
+    bool _move;
+    int _x, _y;
+    const cchar_t *_character;
     int _length;
   };
 
   class vline : public osmanip {
   public:
-    explicit vline(int length, chtype character = 0)
-      : _character(character), _length(length) {}
+    explicit vline(int length) : _move(false), _character(nullptr),
+                                 _length(length) {}
+    explicit vline(int length, const cchar &character)
+      : _move(false), _character(character), _length(length) {}
+    explicit vline(int x, int y, int length)
+      : _move(true), _x(x), _y(y), _character(nullptr), _length(length) {}
+    explicit vline(int x, int y, int length, const cchar &character)
+      : _move(true), _x(x), _y(y), _character(character), _length(length) {}
     virtual std::ostream &operator()(std::ostream &os) const;
   private:
-    chtype _character;
+    bool _move;
+    int _x, _y;
+    const cchar_t *_character;
     int _length;
   };
 
   class box : public osmanip {
   public:
-    explicit box(chtype horch = 0, chtype verch = 0)
+    box() : _horch(nullptr), _verch(nullptr) {}
+    explicit box(const cchar &horch, const cchar &verch)
       : _horch(horch), _verch(verch) {}
     virtual std::ostream &operator()(std::ostream &os) const;
   private:
-    chtype _horch, _verch;
+    const cchar_t *_horch, *_verch;
   };
 
   class border : public osmanip {
   public:
-    explicit border(chtype ls = 0, chtype rs = 0, chtype ts = 0, chtype bs = 0,
-                    chtype tl = 0, chtype tr = 0, chtype bl = 0, chtype br = 0)
+    explicit border(const cchar_t *ls = nullptr, const cchar_t *rs = nullptr,
+                    const cchar_t *ts = nullptr, const cchar_t *bs = nullptr,
+                    const cchar_t *tl = nullptr, const cchar_t *tr = nullptr,
+                    const cchar_t *bl = nullptr, const cchar_t *br = nullptr)
       : _ls(ls), _rs(rs), _ts(ts), _bs(bs), _tl(tl), _tr(tr), _bl(bl),
         _br(br) {}
     virtual std::ostream &operator()(std::ostream &os) const;
   private:
-    chtype _ls, _rs, _ts, _bs, _tl, _tr, _bl, _br;
+    const cchar_t *_ls, *_rs, *_ts, *_bs, *_tl, *_tr, *_bl, *_br;
   };
 
   class resize : public osmanip {
@@ -315,7 +508,7 @@ namespace curs {
   /***************************************************************************
    */
 
-  class palette {
+  class colors {
   public:
     static const unsigned int BLACK   = COLOR_BLACK;
     static const unsigned int RED     = COLOR_RED;
@@ -326,20 +519,28 @@ namespace curs {
     static const unsigned int CYAN    = COLOR_CYAN;
     static const unsigned int WHITE   = COLOR_WHITE;
 
-    static bool has_colors();
-    static bool can_change_color();
+    static bool have() { return (::has_colors() == TRUE); }
+    static bool can_change() { return (::can_change_color() == TRUE); }
     static inline int start() { return start_color(); }
 
-    static inline int colors() { return COLORS; }
+    static inline int count() { return COLORS; }
     static inline int pairs() { return COLOR_PAIRS; }
 
-    static inline int pair(int index, int fg, int bg) {
+    static inline int pair(short index, short fg, short bg) {
       return init_pair(index, fg, bg);
     }
     static inline int pair(int index) { return COLOR_PAIR(index); }
 
-    static inline int color(int index, int r, int g, int b) {
+    static inline int color(short index, short r, short g, short b) {
       return init_color(index, r, g, b);
+    }
+
+    static inline int get_rgb(int index, short &r, short &g, short &b) {
+      return color_content(index, &r, &g, &b);
+    }
+
+    static inline int get_color(short index, short &fg, short &bg) {
+      return pair_content(index, &fg, &bg);
     }
   };
 
@@ -390,8 +591,8 @@ namespace curs {
   protected:
 
     virtual void key_event(int ch) = 0;
-    virtual void lose_focus() {}
-    virtual void gain_focus() {}
+    virtual void lose_focus();
+    virtual void gain_focus();
   };
 
   class mouse_event_handler {
@@ -409,5 +610,3 @@ namespace curs {
 }
 
 std::ostream & operator <<(std::ostream &ios, const curs::osmanip &manip);
-
-#endif /* _CPPCURSES_H */
