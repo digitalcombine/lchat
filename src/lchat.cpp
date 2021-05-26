@@ -935,6 +935,11 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  // Check if our input is from a tty.
+  if (not isatty(STDIN_FILENO)) {
+    mesg_stdin = true;
+  }
+
   // Read the password file to get our user name.
   struct passwd *pw_entry = getpwuid(getuid());
   if (pw_entry == NULL) {
