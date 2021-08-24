@@ -41,7 +41,9 @@
 #include <cstring>
 #include <cerrno>
 #include <clocale>
+#include <mutex>
 #include <pwd.h>
+#include <thread>
 #include <unistd.h>
 #include <signal.h>
 #include <sys/wait.h>
@@ -85,9 +87,11 @@ public:
    */
   void scroll(scroll_t value);
 
-  bool read_server();
+  static void thread_loop(chat *obj);
 
   void redraw();
+
+  bool connected() const { return _connected; }
 
   static bool auto_scroll;
   static unsigned int scrollback;
@@ -95,6 +99,8 @@ public:
   friend class status;
 
 protected:
+
+  void read_server();
 
   /** Display a line of the chat with in the window. This applies all the
    * syntax highlighting to the chat.
@@ -116,6 +122,9 @@ private:
    * This is used to scroll the chat window.
    */
   unsigned int _buffer_location;
+
+  std::mutex _mutex;
+  bool _connected;
 };
 
 /** The Userlist Window.
@@ -218,7 +227,7 @@ chat::chat(lchat &chatw, int x, int y, int width, int height)
   : curs::window(x, y, width, height),
   _lchat(&chatw),
   _buffer_size(scrollback),
-  _buffer_location(0) {
+    _buffer_location(0), _connected(true) {
   *this << curs::scrollok(true)
         << curs::cursor(0, height - 1)
         << std::flush;
@@ -268,23 +277,31 @@ void chat::scroll(scroll_t value) {
 }
 
 /*********************
+ * chat::thread_loop *
+ *********************/
+
+void chat::thread_loop(chat *obj) {
+  obj->read_server();
+}
+
+/*********************
  * chat::read_server *
  *********************/
 
-bool chat::read_server() {
+void chat::read_server() {
   std::string line;
-  for (;;) {
+  while (chatio) {
     try {
       // Attempt to read a line from the server.
       getline(chatio, line);
       if (line.empty()) {
-        return false; // Nothing returned so return.
+        continue; // Nothing returned so return.
       }
 
       if (line.compare(0, 2, "~ ") == 0) {
         // User list update
         _lchat->refresh_users(line.substr(2, line.length() - 2));
-        return true;
+        continue;
       }
 
       // User join message.
@@ -321,10 +338,10 @@ bool chat::read_server() {
     } catch (sockets::ionotready &err) {
       // Nothing to read on the socket, so return.
       chatio.clear();
-      return false;
     }
   }
-  return true;
+
+  _connected = false;
 }
 
 /****************
@@ -334,6 +351,8 @@ bool chat::read_server() {
 void chat::redraw() {
   int w, h;
   size(w, h);
+
+  _mutex.lock();
 
   // Clear the chat window.
   *this << curs::erase << curs::cursor(0, h - 1) << curs::cursor(false);
@@ -353,6 +372,9 @@ void chat::redraw() {
   }
 
   *this << std::flush;
+  curs::terminal::update();
+
+  _mutex.unlock();
 }
 
 /**************
@@ -699,9 +721,13 @@ void lchat::refresh_users(const std::string &list) {
  ***********************/
 
 void lchat::operator()() {
+
+  std::thread chat_view(&chat::thread_loop, &_chat);
+
   // Our main application loop.
-  while (chatio) {
-    busy = _chat.read_server();
+  while (_chat.connected()) {
+    //while (chatio) {
+    //busy = _chat.read_server();
 
     _status.redraw();
     _input.redraw();
@@ -711,6 +737,8 @@ void lchat::operator()() {
 
     curs::terminal::update();
   }
+
+  chat_view.join();
 }
 
 /************************
@@ -967,7 +995,7 @@ int main(int argc, char *argv[]) {
   // Try to connect to the chat unix socket.
   try {
     chatio.open(sock_path);
-    chatio >> sockets::nonblock;
+    //chatio >> sockets::nonblock;
   } catch (std::exception &err) {
     std::cerr << err.what() << std::endl;
     return EXIT_FAILURE;
