@@ -69,6 +69,9 @@ static curs::cchar bgstatus(C_STATUS, U' ');
 // Mutex to synchronize all curses drawing operations.
 static std::mutex curs_mtx;
 
+// Flag set when the terminal needs to be updated by draw methods.
+static bool update_required = true;
+
 /***************
  * update_term *
  ***************/
@@ -76,7 +79,10 @@ static std::mutex curs_mtx;
 static void update_term() {
   // Synchronized update of the terminal.
   curs_mtx.lock();
-  curs::terminal::update();
+  if (update_required) {
+    curs::terminal::update();
+    update_required = false;
+  }
   curs_mtx.unlock();
 }
 
@@ -387,6 +393,8 @@ void chat::redraw() {
   }
 
   *this << std::flush;
+
+  update_required = true;
   curs_mtx.unlock();
 
   _lchat->update();
@@ -491,6 +499,8 @@ void userlist::redraw() {
 
   // Flush it to the screen.
   *this << std::flush;
+
+  update_required = true;
   curs_mtx.unlock();
 }
 
@@ -533,6 +543,8 @@ void status::redraw() {
     *this << curs::cursor(width() - 2, 0) << "o";
 
   *this << std::flush;
+
+  update_required = true;
   curs_mtx.unlock();
 }
 
@@ -560,6 +572,7 @@ void input::redraw() {
         << curs::cursor(0, 0) << "> " << _line
         << curs::cursor(_insert + 2, 0) << curs::cursor(true);
 
+  update_required = true;
   curs_mtx.unlock();
 }
 
@@ -780,6 +793,7 @@ void lchat::resize_event() {
   // Redraw ourself.
   _draw();
 
+  curs_mtx.lock();
   // Get the new window size.
   int w, h;
   size(w, h);
@@ -800,6 +814,7 @@ void lchat::resize_event() {
   _input << curs::move(0, h - 1)
          << curs::resize(w, 1);
   _input.redraw();
+  curs_mtx.unlock();
 }
 
 /****************
@@ -822,6 +837,7 @@ void lchat::_draw() {
         << curs::vline(h - 3)
         << std::flush;
 
+  update_required = true;
   curs_mtx.unlock();
 }
 
@@ -1064,7 +1080,7 @@ int main(int argc, char *argv[]) {
 
       terminal.cbreak(true);
       terminal.echo(false);
-      terminal.halfdelay(20);
+      terminal.halfdelay(10);
 
       lchat chat_ui;
       chatio << "/who" << std::endl;
