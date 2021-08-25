@@ -66,6 +66,20 @@ static std::string my_name;
 
 static curs::cchar bgstatus(C_STATUS, U' ');
 
+// Mutex to synchronize all curses drawing operations.
+static std::mutex curs_mtx;
+
+/***************
+ * update_term *
+ ***************/
+
+static void update_term() {
+  // Synchronized update of the terminal.
+  curs_mtx.lock();
+  curs::terminal::update();
+  curs_mtx.unlock();
+}
+
 /******************************************************************************
  */
 
@@ -123,7 +137,6 @@ private:
    */
   unsigned int _buffer_location;
 
-  std::mutex _mutex;
   bool _connected;
 };
 
@@ -193,6 +206,8 @@ public:
   void refresh_users(const std::string &list);
 
   void operator()();
+
+  void update();
 
   friend class input;
 
@@ -352,7 +367,7 @@ void chat::redraw() {
   int w, h;
   size(w, h);
 
-  _mutex.lock();
+  curs_mtx.lock();
 
   // Clear the chat window.
   *this << curs::erase << curs::cursor(0, h - 1) << curs::cursor(false);
@@ -372,9 +387,9 @@ void chat::redraw() {
   }
 
   *this << std::flush;
-  curs::terminal::update();
+  curs_mtx.unlock();
 
-  _mutex.unlock();
+  _lchat->update();
 }
 
 /**************
@@ -464,6 +479,8 @@ void userlist::update(const std::string &list) {
  ********************/
 
 void userlist::redraw() {
+  curs_mtx.lock();
+
   // Reset the window.
   *this << curs::erase << curs::cursor(0, 0) << curs::cursor(false);
 
@@ -474,6 +491,7 @@ void userlist::redraw() {
 
   // Flush it to the screen.
   *this << std::flush;
+  curs_mtx.unlock();
 }
 
 /******************************************************************************
@@ -486,6 +504,8 @@ status::status(chat &ch, userlist &ul, int x, int y, int width, int height)
 }
 
 void status::redraw() {
+  curs_mtx.lock();
+
   *this << curs::attron(curs::colors::pair(C_STATUS))
         << curs::bkgrnd(bgstatus) //, curs::colors::pair(C_STATUS))
         << curs::cursor(0, 0) << curs::erase;
@@ -513,6 +533,7 @@ void status::redraw() {
     *this << curs::cursor(width() - 2, 0) << "o";
 
   *this << std::flush;
+  curs_mtx.unlock();
 }
 
 /******************************************************************************
@@ -533,23 +554,24 @@ input::input(lchat &chat, int x, int y, int width, int height)
  *****************/
 
 void input::redraw() {
+  curs_mtx.lock();
+
   *this << curs::erase
         << curs::cursor(0, 0) << "> " << _line
         << curs::cursor(_insert + 2, 0) << curs::cursor(true);
+
+  curs_mtx.unlock();
 }
 
 /********************
  * input::key_event *
  ********************/
 
-static bool busy = false;
-
 #define CTRL(c) ((c) & 037)
 
 void input::key_event(int ch) {
   switch (ch) {
   case ERR: // Keyboard input timeout
-    if (not busy) usleep(1000);
     return;
 
   case '\n': // Send the line to the server and reset the input.
@@ -559,10 +581,12 @@ void input::key_event(int ch) {
     break;
 
   case CTRL('a'):
+    // Toggle the auto scroll feature.
     chat::auto_scroll = not chat::auto_scroll;
     break;
 
   case CTRL('r'):
+    // We cheat and use the resize event handler to redraw the window.
     _lchat->resize_event();
     break;
 
@@ -722,23 +746,30 @@ void lchat::refresh_users(const std::string &list) {
 
 void lchat::operator()() {
 
+  // Create the chat window thread.
   std::thread chat_view(&chat::thread_loop, &_chat);
+
+  update();
 
   // Our main application loop.
   while (_chat.connected()) {
-    //while (chatio) {
-    //busy = _chat.read_server();
-
-    _status.redraw();
-    _input.redraw();
-    curs::terminal::update();
-
     curs::events::process();
-
-    curs::terminal::update();
+    update();
   }
 
+  // Clean up the chat window thread.
   chat_view.join();
+}
+
+/******************
+ *  lchat::update *
+ ******************/
+
+void lchat::update() {
+  _status.redraw();
+  _input.redraw();
+
+  update_term();
 }
 
 /************************
@@ -776,6 +807,8 @@ void lchat::resize_event() {
  ****************/
 
 void lchat::_draw() {
+  curs_mtx.lock();
+
   int w, h;
   size(w, h);
 
@@ -788,6 +821,8 @@ void lchat::_draw() {
         << curs::cursor(w - (_userlist_width + 1), 1)
         << curs::vline(h - 3)
         << std::flush;
+
+  curs_mtx.unlock();
 }
 
 /***********
@@ -1029,7 +1064,7 @@ int main(int argc, char *argv[]) {
 
       terminal.cbreak(true);
       terminal.echo(false);
-      terminal.halfdelay(10);
+      terminal.halfdelay(20);
 
       lchat chat_ui;
       chatio << "/who" << std::endl;
