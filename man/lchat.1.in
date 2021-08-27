@@ -1,4 +1,4 @@
-.TH lchat 1 "10 August 2020" "Version 1.5.5"
+.TH lchat 1 "10 August 2020" "Version @VERSION@"
 
 .SH NAME
 lchat - Local chat console client.

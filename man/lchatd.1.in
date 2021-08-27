@@ -1,4 +1,4 @@
-.TH lchatd 1 "10 August 2020" "Version 1.5.5"
+.TH lchatd 1 "10 August 2020" "Version @VERSION@"
 
 .SH NAME
 \fBlchatd\fR - Local chat daemon and dispatcher.
