@@ -1,0 +1,85 @@
+.TH lchatd 1 "10 August 2020" "Version 1.5.5"
+
+.SH NAME
+\fBlchatd\fR - Local chat daemon and dispatcher.
+
+.SH SYNOPSIS
+.B lchatd
+[-d] [-s \fIpath\fR] [-u \fIuser\fR] [-g \fIgroup\fR] [-w \fIpath\fR]
+.PP
+.B lchatd
+-V
+.PP
+.B lchatd
+-h|-?
+
+.SH DESCRIPTION
+\fBlchatd\fR is a simple, configuration free, \*(lqIRC-ish\*(rq chat server that
+dispatches messages over a local unix socket for a single
+computer/server. Ideally the target for this software is for headless servers
+allowing admins and other users to easily communicate on the console.
+.PP
+There is no real protocol involved, what you type is what is send over the
+socket. To send a message to everyone, simple send a line of text terminated by
+the newline character.
+.PP
+Similar to IRC, the chat daemon understands a few command that start with the /
+character.
+.IP "/quit, /exit"
+The server will close the connection.
+.IP /who
+Returns a list of the current users in the chat room. The list starts with "~ "
+so clients can easily identify it to update any user lists it might display. For
+example the /who command may return:
+
+"~ root john paul george ringo"
+.IP "/version, /about"
+Displays version information about the server.
+.IP "/msg, /priv, /query user message..."
+Sends a private message to the given user.
+.IP /help
+Displays a simple help screen.
+.PP
+Messages sent from the dispatcher to the clients may have some simple
+punctuation prepended to it, indicated the source of the message.  line.
+.IP "\*(lqsender: \*(rq"
+Normal message sent to all the users from \fIsender\fR.
+.IP "\*(lq! sender: \*(rq"
+.IP "\*(lq! ^receiver: \*(rq"
+Private message sent from \fIsender\fR. When a private message has the
+\*(lq^\*(rq symbol before the \fIreceiver\fR's name the message was sent by the
+user and returned to the user by the dispatcher to keep the conversation
+displayed by the client consistant.
+.IP "\*(lq? \*(rq"
+Help message sent by the chat server.
+.PP
+Everything else is considered system information, usually the server responsing
+to a server command.
+
+.SH OPTIONS
+.IP -d
+Puts the program in the background as a system daemon.
+.IP "-s path"
+Specifies the \fIpath\fR to the chat servers unix socket file. The default
+path is /var/lib/lchat/sock.
+.IP "-u user"
+Specifies the user to change the unix socket to and if possible change the uid
+for chatd as well. If chatd is started with root privileges and this option
+isn't specified then the option \fI-u nobody\fR is the default.
+.IP "-g group"
+Specifies the group to change the unix socket to and if possible change the gid
+for chatd as well. This should be set to a group for login users only and
+prevent other system services from being able to access the chat service.
+.IP "-w path"
+Set the the working path of the daemon. Ideally, this should be set to the
+directory where the unix socket is found. The default is /var/lib/lchat.
+.IP -V
+Displays version information.
+.IP "-h|-?"
+Displays a very brief help screen.
+
+.SH AUTHOR
+Written by Ron R Wills.
+
+.SH "SEE ALSO"
+.BR lchat (1).

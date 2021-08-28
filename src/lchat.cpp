@@ -604,7 +604,11 @@ void input::redraw() {
 
 void input::key_event(int ch) {
   if (_history_scan) {
+    // We're in history input mode here.
     switch (ch) {
+    case ERR: // Keyboard input timeout
+      return;
+
     case KEY_UP:
       if (_history_iter != _history.begin()) --_history_iter;
       _line = *_history_iter;
@@ -625,10 +629,11 @@ void input::key_event(int ch) {
       _history_scan = false;
       break;
     }
+
   } else {
+    // Normal input mode.
     switch (ch) {
     case ERR: // Keyboard input timeout
-      if (not busy) usleep(1000);
       return;
 
     case '\n': // Send the line to the server and reset the input.
@@ -639,22 +644,23 @@ void input::key_event(int ch) {
       _insert = 0;
       break;
 
-    case CTRL('a'):
+    case CTRL('a'): // Toggle auto scroll.
       chat::auto_scroll = not chat::auto_scroll;
       break;
 
-    case CTRL('p'):
+    case CTRL('p'): // Enter into history mode.
       _history_scan = true;
       _history_iter = _history.end();
       _line = "";
       _insert = 0;
       break;
 
-    case CTRL('r'):
+    case CTRL('r'): // Force a redraw of the client.
+      // We cheat a little here by using the resize event handler.
       _lchat->resize_event();
       break;
 
-    case KEY_BACKSPACE:
+    case KEY_BACKSPACE: // Backspace key and variants.
     case '\b':
     case '\x7f':
       if (not _line.empty() and _insert > 0) {
@@ -663,7 +669,7 @@ void input::key_event(int ch) {
       }
       break;
 
-    case KEY_DC:
+    case KEY_DC: // Delete key.
       if (not _line.empty() and _insert < _line.size()) {
         _line.erase(_insert, 1);
       }
@@ -867,6 +873,7 @@ void lchat::resize_event() {
   _input << curs::move(0, h - 1)
          << curs::resize(w, 1);
   _input.redraw();
+
   curs_mtx.unlock();
 }
 
