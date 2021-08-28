@@ -87,5 +87,7 @@ AC_CONFIG_FILES([Makefile
                  include/Makefile
                  src/Makefile
                  man/Makefile
+		 man/lchat.1
+		 man/lchatd.1
                  extra/Makefile])
 AC_OUTPUT
