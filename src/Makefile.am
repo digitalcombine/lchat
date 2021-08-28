@@ -6,8 +6,8 @@ dist_pkglibexec_SCRIPTS = fortune-bot.sh
 
 lchat_SOURCES = lchat.cpp curses.cpp nstream.cpp
 lchat_CPPFLAGS = -DSTATEDIR=\"@lchatstatedir@\" -I $(top_srcdir)/include/ \
-	$(CURSES_CFLAGS)
-lchat_LDADD = $(CURSES_LIBS)
+	$(CURSES_CFLAGS) $(PTHREAD_CFLAGS)
+lchat_LDADD = $(CURSES_LIBS) $(PTHREAD_LIBS)
 
 lchatd_SOURCES = lchatd.cpp nstream.cpp
 lchatd_CPPFLAGS = -DSTATEDIR=\"@lchatstatedir@\" -I $(top_srcdir)/include/
