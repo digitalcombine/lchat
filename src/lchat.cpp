@@ -58,6 +58,7 @@ static int C_PRVMSG     = 6;
 static int C_STATUS     = 7;
 static int C_STATUS_ON  = 8;
 static int C_STATUS_OFF = 9;
+static int C_HISTORY    = 10;
 
 // Global data.
 static sockets::iostream chatio;
@@ -181,7 +182,7 @@ private:
   userlist *_userlist;
 };
 
-/**
+/** The chat's input.
  */
 class input : public curs::window, curs::keyboard_event_handler {
 public:
@@ -190,13 +191,21 @@ public:
   void redraw();
 
 protected:
+  // Key event handler.
   void key_event(int ch);
 
 private:
+  // Reference to the chat interface.
   lchat *_lchat;
 
+  // Input string.
   std::string _line;
   size_t _insert;
+
+  // Message history support.
+  std::list<std::string> _history;
+  bool _history_scan;
+  std::list<std::string>::iterator _history_iter;
 };
 
 /**
@@ -327,14 +336,16 @@ void chat::read_server() {
 
       // User join message.
       if (line.length() > 21) {
-        if (line.compare(line.length() - 21, 21, " has joined the chat.") == 0) {
+        if (line.compare(line.length() - 21, 21,
+                         " has joined the chat.") == 0) {
           chatio << "/who" << std::endl;
         }
       }
 
       // User left message.
       if (line.length() > 19) {
-        if (line.compare(line.length() - 19, 19, " has left the chat.") == 0) {
+        if (line.compare(line.length() - 19, 19,
+                         " has left the chat.") == 0) {
           chatio << "/who" << std::endl;
         }
       }
@@ -557,7 +568,8 @@ void status::redraw() {
   ****************/
 
 input::input(lchat &chat, int x, int y, int width, int height)
-  : curs::window(x, y, width, height), _lchat(&chat), _line(), _insert(0) {
+  : curs::window(x, y, width, height), _lchat(&chat), _line(), _insert(0),
+    _history_scan(false) {
   *this << curs::leaveok(false);
 }
 
@@ -568,9 +580,17 @@ input::input(lchat &chat, int x, int y, int width, int height)
 void input::redraw() {
   curs_mtx.lock();
 
-  *this << curs::erase
-        << curs::cursor(0, 0) << "> " << _line
-        << curs::cursor(_insert + 2, 0) << curs::cursor(true);
+  if (_history_scan) {
+    *this << curs::erase
+          << curs::cursor(0, 0) << "? "
+          << curs::pairon(C_HISTORY) << _line
+          << curs::cursor(_insert + 2, 0) << curs::cursor(true)
+          << curs::pairoff(C_HISTORY);
+  } else {
+    *this << curs::erase
+          << curs::cursor(0, 0) << "> " << _line
+          << curs::cursor(_insert + 2, 0) << curs::cursor(true);
+  }
 
   update_required = true;
   curs_mtx.unlock();
@@ -583,93 +603,125 @@ void input::redraw() {
 #define CTRL(c) ((c) & 037)
 
 void input::key_event(int ch) {
-  switch (ch) {
-  case ERR: // Keyboard input timeout
-    return;
+  if (_history_scan) {
+    switch (ch) {
+    case KEY_UP:
+      if (_history_iter != _history.begin()) --_history_iter;
+      _line = *_history_iter;
+      _insert = _line.length();
+      break;
 
-  case '\n': // Send the line to the server and reset the input.
-    chatio << _line << std::endl;
-    _line = "";
-    _insert = 0;
-    break;
+    case KEY_DOWN:
+      if (_history_iter != _history.end()) ++_history_iter;
+      if (_history_iter != _history.end()) {
+        _line = *_history_iter;
+      } else {
+        _line = "";
+      }
+      _insert = _line.length();
+      break;
 
-  case CTRL('a'):
-    // Toggle the auto scroll feature.
-    chat::auto_scroll = not chat::auto_scroll;
-    break;
-
-  case CTRL('r'):
-    // We cheat and use the resize event handler to redraw the window.
-    _lchat->resize_event();
-    break;
-
-  case KEY_BACKSPACE:
-  case '\b':
-  case '\x7f':
-    if (not _line.empty() and _insert > 0) {
-      _line.erase(_insert - 1, 1);
-      _insert--;
+    case '\n':
+      _history_scan = false;
+      break;
     }
-    break;
+  } else {
+    switch (ch) {
+    case ERR: // Keyboard input timeout
+      if (not busy) usleep(1000);
+      return;
 
-  case KEY_DC:
-    if (not _line.empty() and _insert < _line.size()) {
-      _line.erase(_insert, 1);
+    case '\n': // Send the line to the server and reset the input.
+      chatio << _line << std::endl;
+      _history.push_back(_line);
+      while (_history.size() > 100) _history.pop_front();
+      _line = "";
+      _insert = 0;
+      break;
+
+    case CTRL('a'):
+      chat::auto_scroll = not chat::auto_scroll;
+      break;
+
+    case CTRL('p'):
+      _history_scan = true;
+      _history_iter = _history.end();
+      _line = "";
+      _insert = 0;
+      break;
+
+    case CTRL('r'):
+      _lchat->resize_event();
+      break;
+
+    case KEY_BACKSPACE:
+    case '\b':
+    case '\x7f':
+      if (not _line.empty() and _insert > 0) {
+        _line.erase(_insert - 1, 1);
+        _insert--;
+      }
+      break;
+
+    case KEY_DC:
+      if (not _line.empty() and _insert < _line.size()) {
+        _line.erase(_insert, 1);
+      }
+      break;
+
+    case KEY_IC: // Insert key, toggles insert/overwrite mode
+      insert_mode = (insert_mode ? false : true);
+      break;
+
+    case KEY_UP:
+      _lchat->scroll_chat(lchat::D_UP);
+      break;
+
+    case KEY_DOWN:
+      _lchat->scroll_chat(lchat::D_DOWN);
+      break;
+
+    case KEY_LEFT:
+      if (_insert > 0) _insert--;
+      break;
+
+    case KEY_RIGHT:
+      if (_insert < _line.size()) _insert++;
+      break;
+
+    case KEY_PPAGE: // Page up key
+      _lchat->page_chat(lchat::D_UP);
+      break;
+
+    case KEY_NPAGE: // Page down key
+      _lchat->page_chat(lchat::D_DOWN);
+      break;
+
+    case KEY_HOME:
+      _insert = 0;
+      break;
+
+    case KEY_END:
+      _insert = _line.size();
+      break;
+
+    default:
+      /* XXX Current isprint doesn't work with multibyte unicode
+       * characters, but for the moment our _insert pointers is smart
+       * enough to manage multibyte characters.
+       */
+      if (isprint(ch)) {
+        std::string in;
+        in += ch; // This is sillyness, but it's what C++ wants.
+
+        if (insert_mode or _insert >= _line.size())
+          _line.insert(_insert, in);
+        else
+          _line.replace(_insert, 1, in);
+        _insert++;
+      }
+      break;
     }
-    break;
-
-  case KEY_IC: // Insert key, toggles insert/overwrite mode
-    insert_mode = (insert_mode ? false : true);
-    break;
-
-  case KEY_UP:
-    _lchat->scroll_chat(lchat::D_UP);
-    break;
-
-  case KEY_DOWN:
-    _lchat->scroll_chat(lchat::D_DOWN);
-    break;
-
-  case KEY_LEFT:
-    if (_insert > 0) _insert--;
-    break;
-
-  case KEY_RIGHT:
-    if (_insert < _line.size()) _insert++;
-    break;
-
-  case KEY_PPAGE: // Page up key
-    _lchat->page_chat(lchat::D_UP);
-    break;
-
-  case KEY_NPAGE: // Page down key
-    _lchat->page_chat(lchat::D_DOWN);
-    break;
-
-  case KEY_HOME:
-    _insert = 0;
-    break;
-
-  case KEY_END:
-    _insert = _line.size();
-    break;
-
-  default:
-    /* XXX Current isprint doesn't work with multibyte unicode characters, but
-     * for the moment our _insert pointers is smart enough to manage multibyte
-     * characters.
-     */
-    if (isprint(ch)) {
-      std::string in;
-      in += ch; // This is sillyness, but it's what C++ wants.
-
-      if (insert_mode or _insert >= _line.size())
-        _line.insert(_insert, in);
-      else
-        _line.replace(_insert, 1, in);
-      _insert++;
-    }
-    break;
   }
 
   redraw();
@@ -710,6 +762,7 @@ lchat::lchat()
                         curs::colors::BLUE);
     curs::colors::pair(C_STATUS_OFF, curs::colors::RED,
                         curs::colors::BLUE);
+    curs::colors::pair(C_HISTORY, curs::colors::CYAN, -1);
   }
 
   _draw();

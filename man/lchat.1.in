@@ -109,6 +109,8 @@ displayed respectively.
 Toggles the auto scrolling feature on and off.
 .IP "CTRL-R"
 Completely redraws the client.
+.IP "CTRL-P"
+Changes the input to iterate through past messages sent. The up and down arrow keys list through the message history and the enter key will select the displayed entry. The input allows the selected message to be edited before it is sent.
 .PP
 The input window has many of the standard editing keys available. The left, right, home and end keys move the cursor. The delete and backspace keys delete characters accordingly. Finally the insert key toggles the input between insert and overwrite modes.
 
@@ -122,15 +124,6 @@ can eventually lockup the \fBlchatd\fR server.
 
 .SH AUTHOR
 Written by Ron R Wills.
-
-.SH COPYRIGHT
-Copyright © 2018-2020 Ron R Wills <ron@digitalcombine.ca>.
-.br
-License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.
-.br
-This is free software: you are free  to  change  and  redistribute  it.
-.br
-There is NO WARRANTY, to the extent permitted by law.
 
 .SH "SEE ALSO"
 .BR lchatd (1).
