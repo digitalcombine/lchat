@@ -1144,14 +1144,13 @@ int main(int argc, char *argv[]) {
   // Try to connect to the chat unix socket.
   try {
     chatio.open(sock_path);
-    //chatio >> sockets::nonblock;
   } catch (std::exception &err) {
     std::cerr << err.what() << std::endl;
     return EXIT_FAILURE;
   }
 
   if (mesg_stdin) {
-
+    chatio >> sockets::nonblock;
     std::string line;
     while (getline(std::cin, line)) {
       send_message(line);
@@ -1160,7 +1159,7 @@ int main(int argc, char *argv[]) {
 
   } else if (not message.empty()) {
     // If the -m option was given then send the message.
-
+    chatio >> sockets::nonblock;
     send_message(message);
     quit_chat();
 
