@@ -1,0 +1,9 @@
+Search = /m
+Result = /msg buddha
+Cont Result = /msg ron 
+Current answer = /msg buddha
+Common answer = /msg 
+Search = /msg r
+Result = /msg ron 
+Search = /e
+Result = /exit

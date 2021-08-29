@@ -48,3 +48,4 @@ lchat-*.tar.gz
 
 curses.log
 \#*\#
+*.core

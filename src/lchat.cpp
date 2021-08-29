@@ -33,6 +33,7 @@
 
 #include "nstream"
 #include "curses"
+#include "autocomplete.h"
 #include <iostream>
 #include <sstream>
 #include <list>
@@ -72,6 +73,8 @@ static std::mutex curs_mtx;
 
 // Flag set when the terminal needs to be updated by draw methods.
 static bool update_required = true;
+
+static autocomplete completion;
 
 /***************
  * update_term *
@@ -161,6 +164,7 @@ public:
 
 private:
   std::list<std::string> _users;
+  std::list<std::string> _autocomp;
 };
 
 /** The Status Line.
@@ -201,6 +205,8 @@ private:
   // Input string.
   std::string _line;
   size_t _insert;
+
+  std::string _suggest;
 
   // Message history support.
   std::list<std::string> _history;
@@ -472,6 +478,7 @@ void chat::draw(const std::string &line) {
 
 userlist::userlist(int x, int y, int width, int height)
   : curs::window(x, y, width, height) {
+  completion.add(_autocomp);
 }
 
 /********************
@@ -481,11 +488,14 @@ userlist::userlist(int x, int y, int width, int height)
 void userlist::update(const std::string &list) {
   // Clear the old user list.
   _users.clear();
+  _autocomp.clear();
 
   // Repopulate the user list with the servers response.
   size_t last = 0, pos;
   while ((pos = list.find(" ", last)) != list.npos) {
     _users.push_back(list.substr(last, pos));
+    _autocomp.push_back("/msg " + list.substr(last, pos));
+    _autocomp.push_back("/priv " + list.substr(last, pos));
     last = pos += 1;
   }
 
@@ -571,6 +581,15 @@ input::input(lchat &chat, int x, int y, int width, int height)
   : curs::window(x, y, width, height), _lchat(&chat), _line(), _insert(0),
     _history_scan(false) {
   *this << curs::leaveok(false);
+
+  completion.add("/exit");
+  completion.add("/quit");
+  completion.add("/help");
+  completion.add("/version");
+  completion.add("/about");
+  completion.add("/who");
+
+  completion.add(_history);
 }
 
 /*****************
@@ -588,8 +607,14 @@ void input::redraw() {
           << curs::pairoff(C_HISTORY);
   } else {
     *this << curs::erase
-          << curs::cursor(0, 0) << "> " << _line
-          << curs::cursor(_insert + 2, 0) << curs::cursor(true);
+          << curs::cursor(0, 0) << "> ";
+
+    if (not _suggest.empty())
+      *this << curs::pairon(C_HISTORY) << _suggest
+            << curs::pairoff(C_HISTORY);
+
+    *this << curs::cursor(2, 0) << _line;
+    *this << curs::cursor(_insert + 2, 0) << curs::cursor(true);
   }
 
   update_required = true;
@@ -642,6 +667,7 @@ void input::key_event(int ch) {
       while (_history.size() > 100) _history.pop_front();
       _line = "";
       _insert = 0;
+      _suggest = "";
       break;
 
     case CTRL('a'): // Toggle auto scroll.
@@ -660,18 +686,30 @@ void input::key_event(int ch) {
       _lchat->resize_event();
       break;
 
+    case '\x9': {// Tab key
+      bool is_more;
+      _line = completion(_line, _suggest, is_more);
+      if (not _suggest.empty() and not is_more) {
+        _line = _suggest;
+        _insert = _line.size();
+      }
+      _insert = _line.size();
+      break;
+    }
     case KEY_BACKSPACE: // Backspace key and variants.
     case '\b':
     case '\x7f':
       if (not _line.empty() and _insert > 0) {
         _line.erase(_insert - 1, 1);
         _insert--;
+        _suggest = "";
       }
       break;
 
     case KEY_DC: // Delete key.
       if (not _line.empty() and _insert < _line.size()) {
         _line.erase(_insert, 1);
+        _suggest = "";
       }
       break;
 
