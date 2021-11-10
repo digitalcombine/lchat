@@ -275,8 +275,8 @@ void ChatClient::recv() {
         // Server information.
         ios << "Local Chat Server v" << VERSION << "\n"
             << "Copyright (c) 2018 Ron R Wills <ron.rwsoft@gmail.com>\n"
-            << "License GPLv3+; GNU GPL version 3 or later "
-            << "<http://gnu.org/licenses/gpl.html>\n"
+            << "License BSD: 3-Clause BSD License "
+            << "<https://opensource.org/licenses/BSD-3-Clause>.\n"
             << "This is free software, you are free to change and "
             << "redistribute it.\n"
             << "There is NO WARRANTY, to the extent permitted by law."
@@ -321,6 +321,7 @@ void ChatClient::recv() {
                                           << std::endl;
       }
     }
+    ios.clear();
     this->close();
     return;
 

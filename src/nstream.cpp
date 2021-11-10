@@ -275,7 +275,8 @@ int sockets::socketbuf::sync() {
 
 sockets::socketbuf::int_type sockets::socketbuf::underflow() {
   if (gptr() >= egptr()) {
-    if (fcntl(_fd , F_GETFL, 0) & O_NONBLOCK and _notready) {
+    if (_notready) {
+    //if (fcntl(_fd , F_GETFL, 0) & O_NONBLOCK and _notready) {
       _notready = false;
       throw sockets::ionotready();
     }
