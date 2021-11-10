@@ -51,3 +51,4 @@ lchat-*.tar.gz
 curses.log
 \#*\#
 *.core
+/lchat.log

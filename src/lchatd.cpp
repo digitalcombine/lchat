@@ -33,6 +33,7 @@
 
 #include "nstream"
 #include <iostream>
+#include <sstream>
 #include <set>
 #include <cerrno>
 #include <cstring>
@@ -210,11 +211,11 @@ void ChatClient::connect(int sockfd) {
  ********************/
 
 void ChatClient::recv() {
-  std::string in;
-
 #ifdef DEBUG
   std::clog << "Client recv from " << _name << std::endl;
 #endif
+
+  std::string in;
 
   while (getline(ios, in, '\n')) {
 

@@ -275,12 +275,6 @@ int sockets::socketbuf::sync() {
 
 sockets::socketbuf::int_type sockets::socketbuf::underflow() {
   if (gptr() >= egptr()) {
-    if (_notready) {
-    //if (fcntl(_fd , F_GETFL, 0) & O_NONBLOCK and _notready) {
-      _notready = false;
-      throw sockets::ionotready();
-    }
-
     // The buffer has been exhausted, read more in from the socket.
     int res = recv(_fd, &_ibuf.front(), _ibuf.size(), _rflags);
 
@@ -296,6 +290,9 @@ sockets::socketbuf::int_type sockets::socketbuf::underflow() {
         /*  If the socket is non-blocking then we can try again to read
          * the socket or throw an ionotready exception.
          */
+#ifdef DEBUG_NSTREAM
+        std::clog << "sockbuf::underflow eagain" << std::endl;
+#endif
         throw sockets::ionotready();
       } else {
 #ifdef DEBUG_NSTREAM
@@ -305,10 +302,11 @@ sockets::socketbuf::int_type sockets::socketbuf::underflow() {
         throw sockets::exception((std::string("Socket read error: ") +
                                   strerror(errno)));
       }
-    } else if ((unsigned int)res < _ibuf.size()) {
-      _notready = true;
     }
 
+#ifdef DEBUG_NSTREAM
+    std::clog << "sockbuf::underflow: " << res << " bytes" << std::endl;
+#endif
     // Update the buffer.
     setg(&_ibuf.front(), &_ibuf.front(), &_ibuf.front() + res);
   }
@@ -604,6 +602,11 @@ void sockets::server_base::open(const std::string &filename) {
   if (listen(sockfd, 1) == -1)
     throw sockets::exception(std::string("Unable able to listen to ") +
                              filename + ": " + strerror(errno));
+
+  int flags = fcntl(sockfd, F_GETFL, 0);
+  if (fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) < 0)
+    throw sockets::exception(std::string("Setting nonblocking failed: ") +
+                             strerror(errno));
 
 #ifdef DEBUG_NSTREAM
   std::clog << "Server listening on " << filename << std::endl;
