@@ -1,4 +1,4 @@
-.TH lchatd 1 "10 August 2020" "Version 1.5.2"
+.TH lchatd 1 "10 August 2020" "Version @VERSION@"
 
 .SH NAME
 \fBlchatd\fR - Local chat daemon and dispatcher.
@@ -80,15 +80,6 @@ Displays a very brief help screen.
 
 .SH AUTHOR
 Written by Ron R Wills.
-
-.SH COPYRIGHT
-Copyright © 2018-2020 Ron R Wills <ron@digitalcombine.ca>.
-.br
-License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.
-.br
-This is free software: you are free  to  change  and  redistribute  it.
-.br
-There is NO WARRANTY, to the extent permitted by law.
 
 .SH "SEE ALSO"
 .BR lchat (1).

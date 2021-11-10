@@ -1,4 +1,4 @@
-.TH lchat 1 "10 August 2020" "Version 1.5.2"
+.TH lchat 1 "10 August 2020" "Version @VERSION@"
 
 .SH NAME
 lchat - Local chat console client.
@@ -20,11 +20,11 @@ lchat - Local chat console client.
 -h|-?
 
 .SH DESCRIPTION
-\fBlchat\fR is a simple, configuration free, console chat client. The local chat
-suite is a very simple 'IRC-ish' chat system over a unix socket for a single
-computer/server. Ideally the target for this software is for headless servers
-allowing admins and other users to easily communicate with each other on the
-console.
+\fBlchat\fR is a simple, configuration free, console chat client. The local
+chat suite is a very simple 'IRC-ish' chat system over a unix socket for a
+single computer/server. Ideally the target for this software is for headless
+servers allowing admins and other users to easily communicate with each other
+on the console.
 
 .SH OPTIONS
 .IP "-a"
@@ -35,8 +35,8 @@ Specifies the number of lines to be kept in the scrollback buffer. The default
 is 500 lines.
 .IP "-m, -m message"
 Send message to the chat room. This allows for scripts and other programs to
-post messages within the chat room. If message is excluded from the command line
-then it is read from standard in.
+post messages within the chat room. If message is excluded from the command
+line then it is read from standard in.
 .IP "-b 'bot command'"
 Instead of bring up a user interface, the chat stream is piped to the \fIbot
 command's\fR standard input and output. The conversation is read through
@@ -61,31 +61,32 @@ Displays version information.
 Displays a very brief help screen.
 
 .SH USER INTERFACE
-The terminal interface is fairly simple. Along the top of the window is simply a
-title bar. Just bellow it to the left is the chat window. To the right of that
-is the list of all the users in the chat.
+The terminal interface is fairly simple. Along the top of the window is simply
+a title bar. Just bellow it to the left is the chat window. To the right of
+that is the list of all the users in the chat.
 .PP
 Next is the status lines. On the left side of the status line is the number of
 users in the chat. On the right shows the scroll buffer status: the current
 line/number of buffered lines.
 .PP
-Next is a number of icons are shown as various status indicators. If the \fI↧\fR
-character is displayed the auto scroll feature is enabled otherwise it is
-disabled. If an \fIi\fR is displayed it indicates the input is in insert mode an
-\fIo\fR indicates the input is in overwrite mode.
+Next is a number of icons are shown as various status indicators. If the
+\fI↧\fR character is displayed the auto scroll feature is enabled otherwise it
+is disabled. If an \fIi\fR is displayed it indicates the input is in insert
+mode an \fIo\fR indicates the input is in overwrite mode.
 .PP
-The auto scroll feature always scrolls the chat to show new messages as they are
-received. When this feature is turned off the chat display will not be changed
-as new message are received. Auto scroll is turn off by default, but can be
-turned on with the -a command line option or toggled on or off with CTRL-A.
+The auto scroll feature always scrolls the chat to show new messages as they
+are received. When this feature is turned off the chat display will not be
+changed as new message are received. Auto scroll is turn off by default, but
+can be turned on with the -a command line option or toggled on or off with
+CTRL-A.
 .PP
 At the very bottom is the input window. Here just type you message and hit the
-return key to send it. There are several chat server command available which are
-described in the next section.
+return key to send it. There are several chat server command available which
+are described in the next section.
 
 .SH SERVER COMMANDS
-Similar to IRC, the chat daemon understands a few commands that start with the /
-character.
+Similar to IRC, the chat daemon understands a few commands that start with the
+/ character.
 .IP "/quit, /exit"
 The server will close the connection.
 .IP /who
@@ -109,28 +110,31 @@ displayed respectively.
 Toggles the auto scrolling feature on and off.
 .IP "CTRL-R"
 Completely redraws the client.
+.IP "CTRL-P"
+Changes the input to scroll through past messages sent. The up and down arrow
+keys list through the message history and the enter key will select the
+displayed entry. The input allows the selected message to be edited before it
+is sent.
+.IP "Tab"
+The tab key attempts to finish what you have started typing. It uses the server
+commands and history to do this. If it can't find a unique answer, it displays
+the first thing it finds in a dimmed color.
 .PP
-The input window has many of the standard editing keys available. The left, right, home and end keys move the cursor. The delete and backspace keys delete characters accordingly. Finally the insert key toggles the input between insert and overwrite modes.
+The input window has many of the standard editing keys available. The left,
+right, home and end keys move the cursor. The delete and backspace keys delete
+characters accordingly. Finally the insert key toggles the input between insert
+and overwrite modes.
 
 .SH BUGS
 Although the \fBlchat\fR client is completely Unicode enabled the input is not
-capable yet to handle Unicode input. This is because the internal insert pointer
-not be smart enough to work with multi-byte characters yet.
+capable yet to handle Unicode input. This is because the internal insert
+pointer not be smart enough to work with multi-byte characters yet.
 
 Badly written bots that never read the chat messages from their standard input
 can eventually lockup the \fBlchatd\fR server.
 
 .SH AUTHOR
 Written by Ron R Wills.
-
-.SH COPYRIGHT
-Copyright © 2018-2020 Ron R Wills <ron@digitalcombine.ca>.
-.br
-License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.
-.br
-This is free software: you are free  to  change  and  redistribute  it.
-.br
-There is NO WARRANTY, to the extent permitted by law.
 
 .SH "SEE ALSO"
 .BR lchatd (1).

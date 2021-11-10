@@ -1,21 +1,34 @@
 /*                                                                  -*- c++ -*-
- * Copyright (c) 2018 Ron R Wills <ron.rwsoft@gmail.com>
+ * Copyright © 2018 Ron R Wills <ron@digitalcombine.ca>
  *
- * This file is part of the Curses C++ Library.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
  *
- * Curses C++ Library is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
  *
- * Meat is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * 2. Redistributions in binary form must reproduce the above
+ *    copyright notice, this list of conditions and the following
+ *    disclaimer in the documentation and/or other materials provided
+ *    with the distribution.
  *
- * You should have received a copy of the GNU General Public License
- * along with the Network Streams Library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+ * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #ifdef HAVE_NCURSESW_H
@@ -150,6 +163,13 @@ inline int (mvwhline)(WINDOW *win, int y, int x, chtype ch, int n) {
 #undef mvwhline
 #endif
 
+#ifdef mvwhline_set
+inline int (mvwhline_set)(WINDOW *win, int y, int x, const cchar_t *wch, int n) {
+  return mvwhline_set(win, y, x, wch, n);
+}
+#undef mvwhline_set
+#endif
+
 #ifdef mvwvline
 inline int (mvwvline)(WINDOW *win, int y, int x, chtype ch, int n) {
   return mvwvline(win, y, x, ch, n);
@@ -157,9 +177,44 @@ inline int (mvwvline)(WINDOW *win, int y, int x, chtype ch, int n) {
 #undef mvwvline
 #endif
 
+#ifdef mvwvline_set
+inline int (mvwvline_set)(WINDOW *win, int y, int x, const cchar_t *wch, int n) {
+  return mvwvline_set(win, y, x, wch, n);
+}
+#undef mvwvline_set
+#endif
+
 #ifdef scroll
 inline int (scroll)(WINDOW *win) {
   return scroll(win);
 }
 #undef scroll
+#endif
+
+#ifdef setscrreg
+inline int (setscrreg)(int top, int bot) {
+  return setscrreg(top, bot);
+}
+#undef setscrreg
+#endif
+
+#ifdef bkgrnd
+inline int (bkgrnd)(const cchar_t *wch) {
+  return bkgrnd(wch);
+}
+#undef bkgrnd
+#endif
+
+#ifdef bkgrndset
+inline void (bkgrndset)(const cchar_t *wch) {
+  bkgrndset(wch);
+}
+#undef bkgrndset
+#endif
+
+#ifdef touchwin
+inline int (touchwin)(WINDOW *win) {
+  return touchwin(win);
+}
+#undef touchwin
 #endif

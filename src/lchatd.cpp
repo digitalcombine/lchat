@@ -1,21 +1,34 @@
 /*                                                                  -*- c++ -*-
- * Copyright (c) 2018-2020 Ron R Wills <ron.rwsoft@gmail.com>
+ * Copyright © 2018-2020 Ron R Wills <ron@digitalcombine.ca>
  *
- * This file is part of the Local Chat Suite.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
  *
- * Local Chat is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
  *
- * Meat is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * 2. Redistributions in binary form must reproduce the above
+ *    copyright notice, this list of conditions and the following
+ *    disclaimer in the documentation and/or other materials provided
+ *    with the distribution.
  *
- * You should have received a copy of the GNU General Public License
- * along with the Network Streams Library.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+ * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include "nstream"
@@ -72,11 +85,13 @@ private:
 
 sockets::server<ChatClient> chat_server;
 
-/** Count the number of connections a user has to the chat server.
- * @param name The name of the user.
- * @return The number of connections to the server.
- */
+/***************
+ * connections *
+ ***************/
+
 static unsigned int connections(const std::string &name) {
+  /* Count the number of connections a user has to the chat server.
+   */
   unsigned int count = 0;
 
   // Count the connections.
@@ -95,6 +110,10 @@ static unsigned int connections(const std::string &name) {
 /******************************************************************************
  * class ChatClient
  */
+
+/***************************
+ * ChatClient::~ChatClient *
+ ***************************/
 
 ChatClient::~ChatClient() noexcept {}
 
@@ -210,7 +229,9 @@ void ChatClient::recv() {
       if (pos != in.npos) cmd = in.substr(1, pos - 1);
 
       // Server side commands.
+
       if (cmd == "quit" or cmd == "exit") {
+        // Close the connection.
         if (connections(_name) < 2) {
           for (auto &it: chat_server) {
             (sockets::iostream &)(*it.second) << _name
@@ -223,6 +244,7 @@ void ChatClient::recv() {
         return;
 
       } else if (cmd == "who") {
+        // Request a list of connected users.
         std::string result;
         std::set<std::string> people;
 
@@ -236,6 +258,7 @@ void ChatClient::recv() {
         ios << "~ " << result << std::endl;
 
       } else if (cmd == "help") {
+        // Help requested.
         ios << "? All server commands start with the '/' character.\n"
             << "? /help                  - Displays this help dialog.\n"
             << "? /who                   - Displays a list of all the users in "
@@ -249,6 +272,7 @@ void ChatClient::recv() {
             << std::endl;
 
       } else if (cmd == "version" or cmd == "about") {
+        // Server information.
         ios << "Local Chat Server v" << VERSION << "\n"
             << "Copyright (c) 2018 Ron R Wills <ron.rwsoft@gmail.com>\n"
             << "License GPLv3+; GNU GPL version 3 or later "
@@ -259,11 +283,13 @@ void ChatClient::recv() {
             << std::endl;
 
       } else if (cmd == "msg" or cmd == "priv" or cmd == "query") {
+        // Private message.
         std::string pmesg(in.substr(pos + 1, in.npos));
         size_t piv = pmesg.find(' ');
 
         if (piv != pmesg.npos) {
-          send_private(pmesg.substr(0, piv), pmesg.substr(piv + 1, pmesg.npos));
+          send_private(pmesg.substr(0, piv), pmesg.substr(piv + 1,
+                                                          pmesg.npos));
         } else {
           ios << "? Invalid private message, the command is:\n"
               << "? /" << cmd << " user message..." << std::endl;
@@ -288,6 +314,13 @@ void ChatClient::recv() {
 #ifdef DEBUG
     std::clog << "Client closed the socket" << std::endl;
 #endif
+    if (connections(_name) < 2) {
+      for (auto &it: chat_server) {
+        (sockets::iostream &)(*it.second) << _name
+                                          << " has left the chat."
+                                          << std::endl;
+      }
+    }
     this->close();
     return;
 
@@ -301,7 +334,8 @@ void ChatClient::recv() {
  * ChatClient::send_private *
  ****************************/
 
-void ChatClient::send_private(const std::string &who, const std::string &mesg) {
+void ChatClient::send_private(const std::string &who,
+                              const std::string &mesg) {
   bool has_user = false;
 
     // Send the private message to all the users connections.
@@ -423,6 +457,9 @@ static void open_unix_socket(bool second_attempt = false) {
  **********/
 
 static void daemon() {
+  /* Here we disconnect ourself from any controlling tty or parent process to
+   * put ourself into the background.
+   */
   pid_t pid, sid;
 
   syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO),
@@ -473,6 +510,9 @@ static void daemon() {
  ****************/
 
 static void change_group(const std::string &group_name) {
+  /* Change the group ownership of the domain socket and the group which we are
+   * executing under.
+   */
   struct group *group_entry = getgrnam(group_name.c_str());
 
   // Lookup the system group entry.
@@ -507,6 +547,9 @@ static void change_group(const std::string &group_name) {
  ****************/
 
 static void change_user(const std::string &user_name) {
+  /* Change the user ownership of the domain socket and the user which we are
+   * executing under.
+   */
   struct passwd *user_entry = getpwnam(user_name.c_str());
 
   // Lookup the system user entry.
@@ -546,7 +589,8 @@ static void change_user(const std::string &user_name) {
  ***************/
 
 static void sig_handler(int signum) {
-
+  /* Shutdown nicely to any standard signals sent to us.
+   */
 #ifdef DEBUG
   std::clog << "Signal " << signum << " received." << std::endl;
 #endif
@@ -572,7 +616,7 @@ static void sig_handler(int signum) {
 static void version() {
   std::cout << "Local Chat Dispatcher v" VERSION << "\n"
             << "Copyright © 2018-2019 Ron R Wills <ron@digitalcombine.ca>.\n"
-            << "License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.\n\n"
+            << "License BSD: 3-Clause BSD License <https://opensource.org/licenses/BSD-3-Clause>.\n\n"
             << "This is free software: you are free to change and redistribute it.\n"
             << "There is NO WARRANTY, to the extent permitted by law."
             << std::endl;
@@ -588,7 +632,7 @@ static void help() {
             << "  lchatd -V\n"
             << "  lchatd -h|-?\n\n"
             << "Copyright © 2018-2019 Ron R Wills <ron@digitalcombine.ca>.\n"
-            << "License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.\n\n"
+            << "License BSD: 3-Clause BSD License <https://opensource.org/licenses/BSD-3-Clause>.\n\n"
             << "This is free software: you are free to change and redistribute it.\n"
             << "There is NO WARRANTY, to the extent permitted by law."
             << std::endl;

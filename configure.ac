@@ -2,10 +2,10 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([lchat], [1.5.5], [ron@digitalcombine.ca])
+AC_INIT([lchat], [1.6.0], [ron@digitalcombine.ca])
 AM_INIT_AUTOMAKE
 AM_SILENT_RULES
-AC_CONFIG_SRCDIR([src/curses.cpp])
+AC_CONFIG_SRCDIR([src/lchatd.cpp])
 AC_CONFIG_MACRO_DIR([m4])
 
 # Platform detection.
@@ -69,6 +69,8 @@ AX_CHECK_COMPILE_FLAG([-std=c++11],
       [AX_APPEND_FLAG([-std=c++11], CXXFLAGS)],
       AC_MSG_ERROR(C++11 not supported by compiler))
 
+AX_PTHREAD(, [AC_MSG_ERROR([Posix thread library not found])])
+
 AM_CONDITIONAL([FREEBSD], [test x = y])
 case $host_os in
   freebsd*)
@@ -85,5 +87,7 @@ AC_CONFIG_FILES([Makefile
                  include/Makefile
                  src/Makefile
                  man/Makefile
+		 man/lchat.1
+		 man/lchatd.1
                  extra/Makefile])
 AC_OUTPUT

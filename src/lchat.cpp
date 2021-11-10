@@ -1,25 +1,39 @@
 /*                                                                  -*- c++ -*-
- * Copyright (c) 2018-2020 Ron R Wills <ron.rwsoft@gmail.com>
+ * Copyright © 2018-2021 Ron R Wills <ron@digitalcombine.ca>
  *
- * This file is part of the Local Chat Suite.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
  *
- * Local Chat is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
  *
- * Meat is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * 2. Redistributions in binary form must reproduce the above
+ *    copyright notice, this list of conditions and the following
+ *    disclaimer in the documentation and/or other materials provided
+ *    with the distribution.
  *
- * You should have received a copy of the GNU General Public License
- * along with the Local Chat Suite.  If not, see
- * <http://www.gnu.org/licenses/>.
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+ * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include "nstream"
 #include "curses"
+#include "autocomplete.h"
 #include <iostream>
 #include <sstream>
 #include <list>
@@ -28,10 +42,18 @@
 #include <cstring>
 #include <cerrno>
 #include <clocale>
+#include <mutex>
 #include <pwd.h>
+#include <thread>
 #include <unistd.h>
 #include <signal.h>
 #include <sys/wait.h>
+
+#ifdef DEBUG
+#include <fstream>
+
+std::ofstream debug;
+#endif
 
 // Curses color numeric ids.
 static int C_TITLE      = 1;
@@ -43,11 +65,36 @@ static int C_PRVMSG     = 6;
 static int C_STATUS     = 7;
 static int C_STATUS_ON  = 8;
 static int C_STATUS_OFF = 9;
+static int C_HISTORY    = 10;
 
 // Global data.
 static sockets::iostream chatio;
 static std::string sock_path = STATEDIR "/sock";
 static std::string my_name;
+
+static curs::cchar bgstatus(C_STATUS, U' ');
+
+// Mutex to synchronize all curses drawing operations.
+static std::mutex curs_mtx;
+
+// Flag set when the terminal needs to be updated by draw methods.
+static bool update_required = true;
+
+static autocomplete completion;
+
+/***************
+ * update_term *
+ ***************/
+
+static void update_term() {
+  // Synchronized update of the terminal.
+  curs_mtx.lock();
+  if (update_required) {
+    curs::terminal::update();
+    update_required = false;
+  }
+  curs_mtx.unlock();
+}
 
 /******************************************************************************
  */
@@ -70,9 +117,11 @@ public:
    */
   void scroll(scroll_t value);
 
-  bool read_server();
+  static void thread_loop(chat *obj);
 
   void redraw();
+
+  bool connected() const { return _connected; }
 
   static bool auto_scroll;
   static unsigned int scrollback;
@@ -80,6 +129,8 @@ public:
   friend class status;
 
 protected:
+
+  void read_server();
 
   /** Display a line of the chat with in the window. This applies all the
    * syntax highlighting to the chat.
@@ -101,6 +152,8 @@ private:
    * This is used to scroll the chat window.
    */
   unsigned int _buffer_location;
+
+  bool _connected;
 };
 
 /** The Userlist Window.
@@ -117,6 +170,7 @@ public:
 
 private:
   std::list<std::string> _users;
+  std::list<std::string> _autocomp;
 };
 
 /** The Status Line.
@@ -138,7 +192,7 @@ private:
   userlist *_userlist;
 };
 
-/**
+/** The chat's input.
  */
 class input : public curs::window, curs::keyboard_event_handler {
 public:
@@ -147,13 +201,23 @@ public:
   void redraw();
 
 protected:
+  // Key event handler.
   void key_event(int ch);
 
 private:
+  // Reference to the chat interface.
   lchat *_lchat;
 
+  // Input string.
   std::string _line;
   size_t _insert;
+
+  std::string _suggest;
+
+  // Message history support.
+  std::list<std::string> _history;
+  bool _history_scan;
+  std::list<std::string>::iterator _history_iter;
 };
 
 /**
@@ -169,6 +233,8 @@ public:
   void refresh_users(const std::string &list);
 
   void operator()();
+
+  void update();
 
   friend class input;
 
@@ -203,7 +269,7 @@ chat::chat(lchat &chatw, int x, int y, int width, int height)
   : curs::window(x, y, width, height),
   _lchat(&chatw),
   _buffer_size(scrollback),
-  _buffer_location(0) {
+    _buffer_location(0), _connected(true) {
   *this << curs::scrollok(true)
         << curs::cursor(0, height - 1)
         << std::flush;
@@ -253,35 +319,45 @@ void chat::scroll(scroll_t value) {
 }
 
 /*********************
+ * chat::thread_loop *
+ *********************/
+
+void chat::thread_loop(chat *obj) {
+  obj->read_server();
+}
+
+/*********************
  * chat::read_server *
  *********************/
 
-bool chat::read_server() {
+void chat::read_server() {
   std::string line;
-  for (;;) {
+  while (chatio) {
     try {
       // Attempt to read a line from the server.
       getline(chatio, line);
       if (line.empty()) {
-        return false; // Nothing returned so return.
+        continue; // Nothing returned so return.
       }
 
       if (line.compare(0, 2, "~ ") == 0) {
         // User list update
         _lchat->refresh_users(line.substr(2, line.length() - 2));
-        return true;
+        continue;
       }
 
       // User join message.
       if (line.length() > 21) {
-        if (line.compare(line.length() - 21, 21, " has joined the chat.") == 0) {
+        if (line.compare(line.length() - 21, 21,
+                         " has joined the chat.") == 0) {
           chatio << "/who" << std::endl;
         }
       }
 
       // User left message.
       if (line.length() > 19) {
-        if (line.compare(line.length() - 19, 19, " has left the chat.") == 0) {
+        if (line.compare(line.length() - 19, 19,
+                         " has left the chat.") == 0) {
           chatio << "/who" << std::endl;
         }
       }
@@ -306,10 +382,10 @@ bool chat::read_server() {
     } catch (sockets::ionotready &err) {
       // Nothing to read on the socket, so return.
       chatio.clear();
-      return false;
     }
   }
-  return true;
+
+  _connected = false;
 }
 
 /****************
@@ -319,6 +395,8 @@ bool chat::read_server() {
 void chat::redraw() {
   int w, h;
   size(w, h);
+
+  curs_mtx.lock();
 
   // Clear the chat window.
   *this << curs::erase << curs::cursor(0, h - 1) << curs::cursor(false);
@@ -338,6 +416,11 @@ void chat::redraw() {
   }
 
   *this << std::flush;
+
+  update_required = true;
+  curs_mtx.unlock();
+
+  _lchat->update();
 }
 
 /**************
@@ -350,44 +433,44 @@ void chat::draw(const std::string &line) {
   if (line.compare(0, 2, "? ") == 0) {
     // Help message.
     *this << '\n'
-          << curs::attron(curs::palette::pair(C_HLPMSG) | A_BOLD)
+          << curs::attron(curs::colors::pair(C_HLPMSG) | A_BOLD)
           << line.substr(2, line.length() - 2)
-          << curs::attroff(curs::palette::pair(C_HLPMSG) | A_BOLD);
+          << curs::attroff(curs::colors::pair(C_HLPMSG) | A_BOLD);
 
   } else if (line.compare(0, 2, "! ") == 0) {
     // Private message.
     *this << '\n'
-          << curs::attron(curs::palette::pair(C_USERNAME))
+          << curs::attron(curs::colors::pair(C_USERNAME))
           << line.substr(2, pos - 1)
-          << curs::attroff(curs::palette::pair(C_USERNAME))
-          << curs::attron(curs::palette::pair(C_PRVMSG) | A_BOLD)
+          << curs::attroff(curs::colors::pair(C_USERNAME))
+          << curs::attron(curs::colors::pair(C_PRVMSG) | A_BOLD)
           << line.substr(pos + 1, line.length() - pos - 1)
-          << curs::attroff(curs::palette::pair(C_PRVMSG) | A_BOLD);
+          << curs::attroff(curs::colors::pair(C_PRVMSG) | A_BOLD);
 
   } else if (line.compare(0, my_name.length() + 1, my_name + ":") == 0) {
     // A message that was sent by this user.
     *this << '\n'
-          << curs::attron(curs::palette::pair(C_USERNAME))
+          << curs::attron(curs::colors::pair(C_USERNAME))
           << line.substr(0, pos + 1)
-          << curs::attroff(curs::palette::pair(C_USERNAME))
-          << curs::attron(curs::palette::pair(C_MYMESSAGE))
+          << curs::attroff(curs::colors::pair(C_USERNAME))
+          << curs::attron(curs::colors::pair(C_MYMESSAGE))
           << line.substr(pos + 1, line.length() - pos)
-          << curs::attroff(curs::palette::pair(C_MYMESSAGE));
+          << curs::attroff(curs::colors::pair(C_MYMESSAGE));
 
   } else if (pos != line.npos) {
     // Color the senders name.
     *this << '\n'
-          << curs::attron(curs::palette::pair(C_USERNAME))
+          << curs::attron(curs::colors::pair(C_USERNAME))
           << line.substr(0, pos + 1)
-          << curs::attroff(curs::palette::pair(C_USERNAME))
+          << curs::attroff(curs::colors::pair(C_USERNAME))
           << line.substr(pos + 1, line.length() - pos);
 
   } else {
     // System message.
     *this << '\n'
-          << curs::attron(curs::palette::pair(C_SYSMSG))
+          << curs::attron(curs::colors::pair(C_SYSMSG))
           << line
-          << curs::attroff(curs::palette::pair(C_SYSMSG));
+          << curs::attroff(curs::colors::pair(C_SYSMSG));
   }
 }
 
@@ -401,6 +484,7 @@ void chat::draw(const std::string &line) {
 
 userlist::userlist(int x, int y, int width, int height)
   : curs::window(x, y, width, height) {
+  completion.add(_autocomp);
 }
 
 /********************
@@ -410,11 +494,22 @@ userlist::userlist(int x, int y, int width, int height)
 void userlist::update(const std::string &list) {
   // Clear the old user list.
   _users.clear();
+  _autocomp.clear();
+
+#ifdef DEBUG
+  debug << "Parsing user list: " << list << std::endl;
+#endif
 
   // Repopulate the user list with the servers response.
   size_t last = 0, pos;
   while ((pos = list.find(" ", last)) != list.npos) {
-    _users.push_back(list.substr(last, pos));
+    std::string user = list.substr(last, pos - last);
+#ifdef DEBUG
+    debug << " " << last << ":" << pos << " " << user << std::endl;
+#endif
+    _users.push_back(user);
+    _autocomp.push_back("/msg " + user);
+    _autocomp.push_back("/priv " + user);
     last = pos += 1;
   }
 
@@ -427,6 +522,8 @@ void userlist::update(const std::string &list) {
  ********************/
 
 void userlist::redraw() {
+  curs_mtx.lock();
+
   // Reset the window.
   *this << curs::erase << curs::cursor(0, 0) << curs::cursor(false);
 
@@ -437,6 +534,9 @@ void userlist::redraw() {
 
   // Flush it to the screen.
   *this << std::flush;
+
+  update_required = true;
+  curs_mtx.unlock();
 }
 
 /******************************************************************************
@@ -449,8 +549,10 @@ status::status(chat &ch, userlist &ul, int x, int y, int width, int height)
 }
 
 void status::redraw() {
-  *this << curs::attron(curs::palette::pair(C_STATUS))
-        << curs::bkgd(' ', curs::palette::pair(C_STATUS))
+  curs_mtx.lock();
+
+  *this << curs::attron(curs::colors::pair(C_STATUS))
+        << curs::bkgrnd(bgstatus)
         << curs::cursor(0, 0) << curs::erase;
 
   std::ostringstream msg;
@@ -476,6 +578,9 @@ void status::redraw() {
     *this << curs::cursor(width() - 2, 0) << "o";
 
   *this << std::flush;
+
+  update_required = true;
+  curs_mtx.unlock();
 }
 
 /******************************************************************************
@@ -487,8 +592,18 @@ void status::redraw() {
   ****************/
 
 input::input(lchat &chat, int x, int y, int width, int height)
-  : curs::window(x, y, width, height), _lchat(&chat), _line(), _insert(0) {
+  : curs::window(x, y, width, height), _lchat(&chat), _line(), _insert(0),
+    _history_scan(false) {
   *this << curs::leaveok(false);
+
+  completion.add("/exit");
+  completion.add("/quit");
+  completion.add("/help");
+  completion.add("/version");
+  completion.add("/about");
+  completion.add("/who");
+
+  completion.add(_history);
 }
 
 /*****************
@@ -496,106 +611,175 @@ input::input(lchat &chat, int x, int y, int width, int height)
  *****************/
 
 void input::redraw() {
-  *this << curs::erase
-        << curs::cursor(0, 0) << "> " << _line
-        << curs::cursor(_insert + 2, 0) << curs::cursor(true);
+  curs_mtx.lock();
+
+  if (_history_scan) {
+    *this << curs::erase
+          << curs::cursor(0, 0) << "? "
+          << curs::pairon(C_HISTORY) << _line
+          << curs::cursor(_insert + 2, 0) << curs::cursor(true)
+          << curs::pairoff(C_HISTORY);
+  } else {
+    *this << curs::erase
+          << curs::cursor(0, 0) << "> ";
+
+    if (not _suggest.empty())
+      *this << curs::pairon(C_HISTORY) << _suggest
+            << curs::pairoff(C_HISTORY);
+
+    *this << curs::cursor(2, 0) << _line;
+    *this << curs::cursor(_insert + 2, 0) << curs::cursor(true);
+  }
+
+  update_required = true;
+  curs_mtx.unlock();
 }
 
 /********************
  * input::key_event *
  ********************/
 
-static bool busy = false;
-
 #define CTRL(c) ((c) & 037)
 
 void input::key_event(int ch) {
-  switch (ch) {
-  case ERR: // Keyboard input timeout
-    if (not busy) usleep(1000);
-    return;
+  if (_history_scan) {
+    // We're in history input mode here.
+    switch (ch) {
+    case ERR: // Keyboard input timeout
+      return;
 
-  case '\n': // Send the line to the server and reset the input.
-    chatio << _line << std::endl;
-    _line = "";
-    _insert = 0;
-    break;
+    case KEY_UP:
+      if (_history_iter != _history.begin()) --_history_iter;
+      _line = *_history_iter;
+      _insert = _line.length();
+      break;
 
-  case CTRL('a'):
-    chat::auto_scroll = not chat::auto_scroll;
-    break;
+    case KEY_DOWN:
+      if (_history_iter != _history.end()) ++_history_iter;
+      if (_history_iter != _history.end()) {
+        _line = *_history_iter;
+      } else {
+        _line = "";
+      }
+      _insert = _line.length();
+      break;
 
-  case CTRL('r'):
-    _lchat->resize_event();
-    break;
-
-  case KEY_BACKSPACE:
-  case '\b':
-  case '\x7f':
-    if (not _line.empty() and _insert > 0) {
-      _line.erase(_insert - 1, 1);
-      _insert--;
+    case '\n':
+      _history_scan = false;
+      break;
     }
-    break;
 
-  case KEY_DC:
-    if (not _line.empty() and _insert < _line.size()) {
-      _line.erase(_insert, 1);
+  } else {
+    // Normal input mode.
+    switch (ch) {
+    case ERR: // Keyboard input timeout
+      return;
+
+    case '\n': // Send the line to the server and reset the input.
+      chatio << _line << std::endl;
+      _history.push_back(_line);
+      while (_history.size() > 100) _history.pop_front();
+      _line = "";
+      _insert = 0;
+      _suggest = "";
+      break;
+
+    case CTRL('a'): // Toggle auto scroll.
+      chat::auto_scroll = not chat::auto_scroll;
+      break;
+
+    case CTRL('p'): // Enter into history mode.
+      _history_scan = true;
+      _history_iter = _history.end();
+      _line = "";
+      _insert = 0;
+      break;
+
+    case CTRL('r'): // Force a redraw of the client.
+      // We cheat a little here by using the resize event handler.
+      _lchat->resize_event();
+      break;
+
+    case '\x9': {// Tab key
+      bool is_more;
+      _line = completion(_line, _suggest, is_more);
+      if (not _suggest.empty() and not is_more) {
+        _line = _suggest;
+        _insert = _line.size();
+      }
+      _insert = _line.size();
+      break;
     }
-    break;
+    case KEY_BACKSPACE: // Backspace key and variants.
+    case '\b':
+    case '\x7f':
+      if (not _line.empty() and _insert > 0) {
+        _line.erase(_insert - 1, 1);
+        _insert--;
+        _suggest = "";
+      }
+      break;
 
-  case KEY_IC: // Insert key, toggles insert/overwrite mode
-    insert_mode = (insert_mode ? false : true);
-    break;
+    case KEY_DC: // Delete key.
+      if (not _line.empty() and _insert < _line.size()) {
+        _line.erase(_insert, 1);
+        _suggest = "";
+      }
+      break;
 
-  case KEY_UP:
-    _lchat->scroll_chat(lchat::D_UP);
-    break;
+    case KEY_IC: // Insert key, toggles insert/overwrite mode
+      insert_mode = (insert_mode ? false : true);
+      break;
 
-  case KEY_DOWN:
-    _lchat->scroll_chat(lchat::D_DOWN);
-    break;
+    case KEY_UP:
+      _lchat->scroll_chat(lchat::D_UP);
+      break;
 
-  case KEY_LEFT:
-    if (_insert > 0) _insert--;
-    break;
+    case KEY_DOWN:
+      _lchat->scroll_chat(lchat::D_DOWN);
+      break;
 
-  case KEY_RIGHT:
-    if (_insert < _line.size()) _insert++;
-    break;
+    case KEY_LEFT:
+      if (_insert > 0) _insert--;
+      break;
 
-  case KEY_PPAGE: // Page up key
-    _lchat->page_chat(lchat::D_UP);
-    break;
+    case KEY_RIGHT:
+      if (_insert < _line.size()) _insert++;
+      break;
 
-  case KEY_NPAGE: // Page down key
-    _lchat->page_chat(lchat::D_DOWN);
-    break;
+    case KEY_PPAGE: // Page up key
+      _lchat->page_chat(lchat::D_UP);
+      break;
 
-  case KEY_HOME:
-    _insert = 0;
-    break;
+    case KEY_NPAGE: // Page down key
+      _lchat->page_chat(lchat::D_DOWN);
+      break;
 
-  case KEY_END:
-    _insert = _line.size();
-    break;
+    case KEY_HOME:
+      _insert = 0;
+      break;
 
-  default:
-    /* XXX Current isprint doesn't work with multibyte unicode characters, but
-     * for the moment our _insert pointers is smart enough to manage multibyte
-     * characters.
-     */
-    if (isprint(ch)) {
-      std::string in;
-      in += ch; // This is sillyness, but it's what C++ wants.
+    case KEY_END:
+      _insert = _line.size();
+      break;
 
-      if (insert_mode or _insert >= _line.size())
-        _line.insert(_insert, in);
-      else
-        _line.replace(_insert, 1, in);
-      _insert++;
+    default:
+      /* XXX Current isprint doesn't work with multibyte unicode
+       * characters, but for the moment our _insert pointers is smart
+       * enough to manage multibyte characters.
+       */
+      if (isprint(ch)) {
+        std::string in;
+        in += ch; // This is sillyness, but it's what C++ wants.
+
+        if (insert_mode or _insert >= _line.size())
+          _line.insert(_insert, in);
+        else
+          _line.replace(_insert, 1, in);
+        _insert++;
+      }
+      break;
     }
-    break;
   }
 
   redraw();
@@ -621,21 +805,22 @@ lchat::lchat()
   *this << curs::keypad(true);
 
   // Configure the color theme.
-  curs::palette::start();
-  if (curs::palette::has_colors()) {
-    curs::palette::pair(C_TITLE, curs::palette::WHITE,
-                        curs::palette::BLUE);
-    curs::palette::pair(C_USERNAME, curs::palette::CYAN, -1);
-    curs::palette::pair(C_MYMESSAGE, curs::palette::GREEN, -1);
-    curs::palette::pair(C_HLPMSG, curs::palette::CYAN, -1);
-    curs::palette::pair(C_SYSMSG, curs::palette::BLUE, -1);
-    curs::palette::pair(C_PRVMSG, curs::palette::YELLOW, -1);
-    curs::palette::pair(C_STATUS, curs::palette::WHITE,
-                        curs::palette::BLUE);
-    curs::palette::pair(C_STATUS_ON, curs::palette::YELLOW,
-                        curs::palette::BLUE);
-    curs::palette::pair(C_STATUS_OFF, curs::palette::RED,
-                        curs::palette::BLUE);
+  curs::colors::start();
+  if (curs::colors::have()) {
+    curs::colors::pair(C_TITLE, curs::colors::WHITE,
+                        curs::colors::BLUE);
+    curs::colors::pair(C_USERNAME, curs::colors::CYAN, -1);
+    curs::colors::pair(C_MYMESSAGE, curs::colors::GREEN, -1);
+    curs::colors::pair(C_HLPMSG, curs::colors::CYAN, -1);
+    curs::colors::pair(C_SYSMSG, curs::colors::BLUE, -1);
+    curs::colors::pair(C_PRVMSG, curs::colors::YELLOW, -1);
+    curs::colors::pair(C_STATUS, curs::colors::WHITE,
+                        curs::colors::BLUE);
+    curs::colors::pair(C_STATUS_ON, curs::colors::YELLOW,
+                        curs::colors::BLUE);
+    curs::colors::pair(C_STATUS_OFF, curs::colors::RED,
+                        curs::colors::BLUE);
+    curs::colors::pair(C_HISTORY, curs::colors::CYAN, -1);
   }
 
   _draw();
@@ -684,18 +869,31 @@ void lchat::refresh_users(const std::string &list) {
  ***********************/
 
 void lchat::operator()() {
+
+  // Create the chat window thread.
+  std::thread chat_view(&chat::thread_loop, &_chat);
+
+  update();
+
   // Our main application loop.
-  while (chatio) {
-    busy = _chat.read_server();
-
-    _status.redraw();
-    _input.redraw();
-    curs::terminal::update();
-
+  while (_chat.connected()) {
     curs::events::process();
-
-    curs::terminal::update();
+    update();
   }
+
+  // Clean up the chat window thread.
+  chat_view.join();
+}
+
+/******************
+ *  lchat::update *
+ ******************/
+
+void lchat::update() {
+  _status.redraw();
+  _input.redraw();
+
+  update_term();
 }
 
 /************************
@@ -703,28 +901,42 @@ void lchat::operator()() {
  ************************/
 
 void lchat::resize_event() {
-  // Redraw ourself.
-  _draw();
+#ifdef DEBUG
+  debug << "Resize event to ";
+#endif
 
+  curs_mtx.lock();
   // Get the new window size.
   int w, h;
   size(w, h);
 
+#ifdef DEBUG
+  debug << w << "x" << h << std::endl;
+#endif
+
   // Resize and refresh all the other windows.
   _chat << curs::move(0, 1)
         << curs::resize(w - (_userlist_width + 1), h - 3);
-  _chat.redraw();
 
   _userlist << curs::move(w - _userlist_width, 1)
             << curs::resize(_userlist_width, h - 3);
-  _userlist.redraw();
 
   _status << curs::move(0, h - 2)
           << curs::resize(w, 1);
-  _status.redraw();
 
   _input << curs::move(0, h - 1)
          << curs::resize(w, 1);
+
+  curs_mtx.unlock();
+
+#ifdef DEBUG
+  debug << " redrawing screen" << std::endl;
+#endif
+
+  _draw(); // Redraw ourself.
+  _chat.redraw();
+  _userlist.redraw();
+  _status.redraw();
   _input.redraw();
 }
 
@@ -733,18 +945,23 @@ void lchat::resize_event() {
  ****************/
 
 void lchat::_draw() {
+  curs_mtx.lock();
+
   int w, h;
   size(w, h);
 
   // Draw the frames around our windows.
-  *this << curs::attron(curs::palette::pair(C_TITLE) | A_BOLD)
-        << curs::cursor(0, 0) << "📡" << std::string(w - 1, ' ');
+  *this << curs::attron(curs::colors::pair(C_TITLE) | A_BOLD)
+        << curs::cursor(0, 0) << std::string(w, ' ');
   std::string title("Local Chat v" VERSION);
   *this << curs::cursor((w - title.size()) / 2, 0) << title
-        << curs::attroff(curs::palette::pair(C_TITLE) | A_BOLD)
+        << curs::attroff(curs::colors::pair(C_TITLE) | A_BOLD)
         << curs::cursor(w - (_userlist_width + 1), 1)
         << curs::vline(h - 3)
         << std::flush;
+
+  update_required = true;
+  curs_mtx.unlock();
 }
 
 /***********
@@ -754,7 +971,7 @@ void lchat::_draw() {
 static void version() {
   std::cout << "Local Chat v" VERSION << "\n"
             << "Copyright © 2018-2020 Ron R Wills <ron@digitalcombine.ca>.\n"
-            << "License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.\n\n"
+            << "License BSD: 3-Clause BSD License <https://opensource.org/licenses/BSD-3-Clause>.\n\n"
             << "This is free software: you are free to change and redistribute it.\n"
             << "There is NO WARRANTY, to the extent permitted by law."
             << std::endl;
@@ -772,7 +989,7 @@ static void help() {
             << "  lchat -V\n"
             << "  lchat -h|-?\n\n"
             << "Copyright © 2018-2020 Ron R Wills <ron@digitalcombine.ca>.\n"
-            << "License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.\n\n"
+            << "License BSD: 3-Clause BSD License <https://opensource.org/licenses/BSD-3-Clause>.\n\n"
             << "This is free software: you are free to change and redistribute it.\n"
             << "There is NO WARRANTY, to the extent permitted by law."
             << std::endl;
@@ -886,6 +1103,11 @@ int main(int argc, char *argv[]) {
   std::string bot_command, message;
   bool mesg_stdin = false;
 
+#ifdef DEBUG
+  debug.open("lchat.log");
+#endif
+
+
   // Get the command line arguments.
   int opt;
   while ((opt = getopt(argc, argv, ":as:l:b:m:hV?")) != -1) {
@@ -935,6 +1157,11 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  // Check if our input is from a tty.
+  if (not isatty(STDIN_FILENO)) {
+    mesg_stdin = true;
+  }
+
   // Read the password file to get our user name.
   struct passwd *pw_entry = getpwuid(getuid());
   if (pw_entry == NULL) {
@@ -947,14 +1174,13 @@ int main(int argc, char *argv[]) {
   // Try to connect to the chat unix socket.
   try {
     chatio.open(sock_path);
-    chatio >> sockets::nonblock;
   } catch (std::exception &err) {
     std::cerr << err.what() << std::endl;
     return EXIT_FAILURE;
   }
 
   if (mesg_stdin) {
-
+    chatio >> sockets::nonblock;
     std::string line;
     while (getline(std::cin, line)) {
       send_message(line);
@@ -963,7 +1189,7 @@ int main(int argc, char *argv[]) {
 
   } else if (not message.empty()) {
     // If the -m option was given then send the message.
-
+    chatio >> sockets::nonblock;
     send_message(message);
     quit_chat();
 
@@ -975,26 +1201,27 @@ int main(int argc, char *argv[]) {
   } else {
     // Interactive user interface.
 
-    // Setup the terminal.
-    curs::terminal::initialize();
-    curs::terminal::cbreak(true);
-    curs::terminal::echo(false);
-    curs::terminal::halfdelay(10);
-
     try {
+      // Setup the terminal.
+      curs::terminal terminal;
+
+      terminal.cbreak(true);
+      terminal.echo(false);
+      terminal.halfdelay(10);
+
       lchat chat_ui;
       chatio << "/who" << std::endl;
 
       chat_ui();
     } catch (std::exception &err) {
-      curs::terminal::restore();
       std::cerr << err.what() << std::endl;
       return EXIT_FAILURE;
     }
-
-    // Restore the terminal.
-    curs::terminal::restore();
   }
+
+#ifdef DEBUG
+  debug.close();
+#endif
 
   return EXIT_SUCCESS;
 }

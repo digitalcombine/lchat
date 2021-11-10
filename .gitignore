@@ -43,8 +43,11 @@ Makefile.in
 # Built files
 /src/lchat
 /src/lchatd
+/man/lchat.1
+/man/lchatd.1
 /extra/lchatd.service
 lchat-*.tar.gz
 
 curses.log
 \#*\#
+*.core
