@@ -552,7 +552,7 @@ void status::redraw() {
   curs_mtx.lock();
 
   *this << curs::attron(curs::colors::pair(C_STATUS))
-        << curs::bkgrnd(bgstatus) //, curs::colors::pair(C_STATUS))
+        << curs::bkgrnd(bgstatus)
         << curs::cursor(0, 0) << curs::erase;
 
   std::ostringstream msg;
