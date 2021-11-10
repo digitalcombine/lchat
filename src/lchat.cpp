@@ -971,7 +971,7 @@ void lchat::_draw() {
 static void version() {
   std::cout << "Local Chat v" VERSION << "\n"
             << "Copyright © 2018-2020 Ron R Wills <ron@digitalcombine.ca>.\n"
-            << "License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.\n\n"
+            << "License BSD: 3-Clause BSD License <https://opensource.org/licenses/BSD-3-Clause>.\n\n"
             << "This is free software: you are free to change and redistribute it.\n"
             << "There is NO WARRANTY, to the extent permitted by law."
             << std::endl;
@@ -989,7 +989,7 @@ static void help() {
             << "  lchat -V\n"
             << "  lchat -h|-?\n\n"
             << "Copyright © 2018-2020 Ron R Wills <ron@digitalcombine.ca>.\n"
-            << "License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.\n\n"
+            << "License BSD: 3-Clause BSD License <https://opensource.org/licenses/BSD-3-Clause>.\n\n"
             << "This is free software: you are free to change and redistribute it.\n"
             << "There is NO WARRANTY, to the extent permitted by law."
             << std::endl;
