@@ -49,6 +49,12 @@
 #include <signal.h>
 #include <sys/wait.h>
 
+#ifdef DEBUG
+#include <fstream>
+
+std::ofstream debug;
+#endif
+
 // Curses color numeric ids.
 static int C_TITLE      = 1;
 static int C_USERNAME   = 2;
@@ -490,12 +496,20 @@ void userlist::update(const std::string &list) {
   _users.clear();
   _autocomp.clear();
 
+#ifdef DEBUG
+  debug << "Parsing user list: " << list << std::endl;
+#endif
+
   // Repopulate the user list with the servers response.
   size_t last = 0, pos;
   while ((pos = list.find(" ", last)) != list.npos) {
-    _users.push_back(list.substr(last, pos));
-    _autocomp.push_back("/msg " + list.substr(last, pos));
-    _autocomp.push_back("/priv " + list.substr(last, pos));
+    std::string user = list.substr(last, pos - last);
+#ifdef DEBUG
+    debug << " " << last << ":" << pos << " " << user << std::endl;
+#endif
+    _users.push_back(user);
+    _autocomp.push_back("/msg " + user);
+    _autocomp.push_back("/priv " + user);
     last = pos += 1;
   }
 
@@ -887,32 +901,43 @@ void lchat::update() {
  ************************/
 
 void lchat::resize_event() {
-  // Redraw ourself.
-  _draw();
+#ifdef DEBUG
+  debug << "Resize event to ";
+#endif
 
   curs_mtx.lock();
   // Get the new window size.
   int w, h;
   size(w, h);
 
+#ifdef DEBUG
+  debug << w << "x" << h << std::endl;
+#endif
+
   // Resize and refresh all the other windows.
   _chat << curs::move(0, 1)
         << curs::resize(w - (_userlist_width + 1), h - 3);
-  _chat.redraw();
 
   _userlist << curs::move(w - _userlist_width, 1)
             << curs::resize(_userlist_width, h - 3);
-  _userlist.redraw();
 
   _status << curs::move(0, h - 2)
           << curs::resize(w, 1);
-  _status.redraw();
 
   _input << curs::move(0, h - 1)
          << curs::resize(w, 1);
-  _input.redraw();
 
   curs_mtx.unlock();
+
+#ifdef DEBUG
+  debug << " redrawing screen" << std::endl;
+#endif
+
+  _draw(); // Redraw ourself.
+  _chat.redraw();
+  _userlist.redraw();
+  _status.redraw();
+  _input.redraw();
 }
 
 /****************
@@ -927,7 +952,7 @@ void lchat::_draw() {
 
   // Draw the frames around our windows.
   *this << curs::attron(curs::colors::pair(C_TITLE) | A_BOLD)
-        << curs::cursor(0, 0) << "📡" << std::string(w - 1, ' ');
+        << curs::cursor(0, 0) << std::string(w, ' ');
   std::string title("Local Chat v" VERSION);
   *this << curs::cursor((w - title.size()) / 2, 0) << title
         << curs::attroff(curs::colors::pair(C_TITLE) | A_BOLD)
@@ -1078,6 +1103,11 @@ int main(int argc, char *argv[]) {
   std::string bot_command, message;
   bool mesg_stdin = false;
 
+#ifdef DEBUG
+  debug.open("lchat.log");
+#endif
+
+
   // Get the command line arguments.
   int opt;
   while ((opt = getopt(argc, argv, ":as:l:b:m:hV?")) != -1) {
@@ -1188,6 +1218,10 @@ int main(int argc, char *argv[]) {
       return EXIT_FAILURE;
     }
   }
+
+#ifdef DEBUG
+  debug.close();
+#endif
 
   return EXIT_SUCCESS;
 }
