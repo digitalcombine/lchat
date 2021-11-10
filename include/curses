@@ -132,7 +132,8 @@ namespace curs {
    */
   class padbuf : public std::streambuf {
   public:
-    padbuf(WINDOW *win, int x, int y, int width, int height, size_t buffer = 2048);
+    padbuf(WINDOW *win, int x, int y, int width, int height,
+           size_t buffer = 2048);
     padbuf(int width, int height, size_t buffer = 2048);
     virtual ~padbuf() noexcept;
 
