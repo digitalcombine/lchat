@@ -333,7 +333,7 @@ void chat::thread_loop(chat *obj) {
 void chat::read_server() {
   std::string line;
   while (chatio) {
-    try {
+    //try {
       // Attempt to read a line from the server.
       getline(chatio, line);
       if (line.empty()) {
@@ -379,12 +379,14 @@ void chat::read_server() {
       } else
         redraw();
 
-    } catch (sockets::ionotready &err) {
-      // Nothing to read on the socket, so return.
-      chatio.clear();
-    }
+      if (not chatio and not chatio.eof()) {
+        chatio.clear();
+      }
   }
 
+#ifdef DEBUG
+  debug << "Server closed the connection" << std::endl;
+#endif
   _connected = false;
 }
 
@@ -881,6 +883,10 @@ void lchat::operator()() {
     update();
   }
 
+#ifdef DEBUG
+  debug << "The chat is disconnected" << std::endl;
+#endif
+
   // Clean up the chat window thread.
   chat_view.join();
 }
@@ -1200,6 +1206,7 @@ int main(int argc, char *argv[]) {
 
   } else {
     // Interactive user interface.
+    chatio >> sockets::block;
 
     try {
       // Setup the terminal.
