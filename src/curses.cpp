@@ -556,8 +556,8 @@ curs::pad::pad(int width, int height)
   : base_ostream(&_padbuf),
     _padbuf(width, height) {
 #ifdef DEBUG
-  debug_log << "PAD: (" << x << ", " << y << ", " << width << ", "
-            << height << ")" << std::endl;
+  /*debug_log << "PAD: (" << _x << ", " << _y << ", " << width << ", "
+    << height << ")" << std::endl;*/
 #endif
 }
 
