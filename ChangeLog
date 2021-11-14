@@ -1,3 +1,25 @@
+Version 1.6.2
+2021-05-25 Ron Wills <ron@digitalcombine.ca>
+
+* Fixes a blocking issue that only a single client to connect
+
+Version 1.6.1
+2021-05-25 Ron Wills <ron@digitalcombine.ca>
+
+* Attempted to fix a blocking issue that only a single client to connect
+
+Version 1.6.0
+2021-05-25 Ron Wills <ron@digitalcombine.ca>
+
+* Multi-threaded client which removes and reduces polling between the communication socket and keyboard input.
+* An internal chat history and basic auto-completion.
+* Also many little bug fixes and refinements.
+
+Version 1.5.5
+2021-05-25 Ron Wills <ron@digitalcombine.ca>
+
+* Control-R key binding added to redraw the client
+
 Version 1.5.4
 2021-02-27 Ron Wills <ron@digitalcombine.ca>
 
