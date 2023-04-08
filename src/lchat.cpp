@@ -77,24 +77,7 @@ static curs::cchar bgstatus(C_STATUS, U' ');
 // Mutex to synchronize all curses drawing operations.
 static std::mutex curs_mtx;
 
-// Flag set when the terminal needs to be updated by draw methods.
-static bool update_required = true;
-
 static autocomplete completion;
-
-/***************
- * update_term *
- ***************/
-
-static void update_term() {
-  // Synchronized update of the terminal.
-  curs_mtx.lock();
-  if (update_required) {
-    curs::terminal::update();
-    update_required = false;
-  }
-  curs_mtx.unlock();
-}
 
 /******************************************************************************
  */
@@ -333,7 +316,7 @@ void chat::thread_loop(chat *obj) {
 void chat::read_server() {
   std::string line;
   while (chatio) {
-    try {
+    //try {
       // Attempt to read a line from the server.
       getline(chatio, line);
       if (line.empty()) {
@@ -379,12 +362,14 @@ void chat::read_server() {
       } else
         redraw();
 
-    } catch (sockets::ionotready &err) {
-      // Nothing to read on the socket, so return.
-      chatio.clear();
-    }
+      if (not chatio and not chatio.eof()) {
+        chatio.clear();
+      }
   }
 
+#ifdef DEBUG
+  debug << "Server closed the connection" << std::endl;
+#endif
   _connected = false;
 }
 
@@ -417,7 +402,7 @@ void chat::redraw() {
 
   *this << std::flush;
 
-  update_required = true;
+  curs::terminal::update();
   curs_mtx.unlock();
 
   _lchat->update();
@@ -535,7 +520,7 @@ void userlist::redraw() {
   // Flush it to the screen.
   *this << std::flush;
 
-  update_required = true;
+  curs::terminal::update();
   curs_mtx.unlock();
 }
 
@@ -579,7 +564,7 @@ void status::redraw() {
 
   *this << std::flush;
 
-  update_required = true;
+  curs::terminal::update();
   curs_mtx.unlock();
 }
 
@@ -631,7 +616,7 @@ void input::redraw() {
     *this << curs::cursor(_insert + 2, 0) << curs::cursor(true);
   }
 
-  update_required = true;
+  curs::terminal::update();
   curs_mtx.unlock();
 }
 
@@ -878,8 +863,12 @@ void lchat::operator()() {
   // Our main application loop.
   while (_chat.connected()) {
     curs::events::process();
-    update();
+    //update();
   }
+
+#ifdef DEBUG
+  debug << "The chat is disconnected" << std::endl;
+#endif
 
   // Clean up the chat window thread.
   chat_view.join();
@@ -893,7 +882,7 @@ void lchat::update() {
   _status.redraw();
   _input.redraw();
 
-  update_term();
+  //update_term();
 }
 
 /************************
@@ -960,7 +949,7 @@ void lchat::_draw() {
         << curs::vline(h - 3)
         << std::flush;
 
-  update_required = true;
+  curs::terminal::update();
   curs_mtx.unlock();
 }
 
@@ -1200,6 +1189,7 @@ int main(int argc, char *argv[]) {
 
   } else {
     // Interactive user interface.
+    chatio >> sockets::block;
 
     try {
       // Setup the terminal.
