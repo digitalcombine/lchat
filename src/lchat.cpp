@@ -77,24 +77,7 @@ static curs::cchar bgstatus(C_STATUS, U' ');
 // Mutex to synchronize all curses drawing operations.
 static std::mutex curs_mtx;
 
-// Flag set when the terminal needs to be updated by draw methods.
-static bool update_required = true;
-
 static autocomplete completion;
-
-/***************
- * update_term *
- ***************/
-
-static void update_term() {
-  // Synchronized update of the terminal.
-  curs_mtx.lock();
-  if (update_required) {
-    curs::terminal::update();
-    update_required = false;
-  }
-  curs_mtx.unlock();
-}
 
 /******************************************************************************
  */
@@ -419,7 +402,7 @@ void chat::redraw() {
 
   *this << std::flush;
 
-  update_required = true;
+  curs::terminal::update();
   curs_mtx.unlock();
 
   _lchat->update();
@@ -537,7 +520,7 @@ void userlist::redraw() {
   // Flush it to the screen.
   *this << std::flush;
 
-  update_required = true;
+  curs::terminal::update();
   curs_mtx.unlock();
 }
 
@@ -581,7 +564,7 @@ void status::redraw() {
 
   *this << std::flush;
 
-  update_required = true;
+  curs::terminal::update();
   curs_mtx.unlock();
 }
 
@@ -633,7 +616,7 @@ void input::redraw() {
     *this << curs::cursor(_insert + 2, 0) << curs::cursor(true);
   }
 
-  update_required = true;
+  curs::terminal::update();
   curs_mtx.unlock();
 }
 
@@ -880,7 +863,7 @@ void lchat::operator()() {
   // Our main application loop.
   while (_chat.connected()) {
     curs::events::process();
-    update();
+    //update();
   }
 
 #ifdef DEBUG
@@ -899,7 +882,7 @@ void lchat::update() {
   _status.redraw();
   _input.redraw();
 
-  update_term();
+  //update_term();
 }
 
 /************************
@@ -966,7 +949,7 @@ void lchat::_draw() {
         << curs::vline(h - 3)
         << std::flush;
 
-  update_required = true;
+  curs::terminal::update();
   curs_mtx.unlock();
 }
 

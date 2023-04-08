@@ -1,3 +1,9 @@
+Version 1.6.3
+2023-04-08 Ron Wills <ron@digitalcombine.ca>
+
+* Got rid of update loop and just drawn when needed. This is much friendlier
+over slow connections.
+
 Version 1.5.4
 2021-02-27 Ron Wills <ron@digitalcombine.ca>
 
