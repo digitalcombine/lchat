@@ -171,6 +171,7 @@ public:
 private:
   /** Reference to the chat window. */
   chat *_chat;
+
   /** Reference to the user list window. */
   userlist *_userlist;
 };
@@ -214,6 +215,7 @@ public:
   void scroll_chat(scroll_dir_t dir);
   void page_chat(scroll_dir_t dir);
   void refresh_users(const std::string &list);
+  void update_status();
 
   void operator()();
 
@@ -250,9 +252,10 @@ static bool insert_mode = true;
 
 chat::chat(lchat &chatw, int x, int y, int width, int height)
   : curs::window(x, y, width, height),
-  _lchat(&chatw),
-  _buffer_size(scrollback),
+    _lchat(&chatw),
+    _buffer_size(scrollback),
     _buffer_location(0), _connected(true) {
+
   *this << curs::scrollok(true)
         << curs::cursor(0, height - 1)
         << std::flush;
@@ -316,55 +319,54 @@ void chat::thread_loop(chat *obj) {
 void chat::read_server() {
   std::string line;
   while (chatio) {
-    //try {
-      // Attempt to read a line from the server.
-      getline(chatio, line);
-      if (line.empty()) {
-        continue; // Nothing returned so return.
-      }
+    // Attempt to read a line from the server.
+    getline(chatio, line);
+    if (line.empty()) {
+      continue; // Nothing returned so return.
+    }
 
-      if (line.compare(0, 2, "~ ") == 0) {
-        // User list update
-        _lchat->refresh_users(line.substr(2, line.length() - 2));
-        continue;
-      }
+    if (line.compare(0, 2, "~ ") == 0) {
+      // User list update
+      _lchat->refresh_users(line.substr(2, line.length() - 2));
+      continue;
+    }
 
-      // User join message.
-      if (line.length() > 21) {
-        if (line.compare(line.length() - 21, 21,
-                         " has joined the chat.") == 0) {
-          chatio << "/who" << std::endl;
-        }
+    // User join message.
+    if (line.length() > 21) {
+      if (line.compare(line.length() - 21, 21,
+                       " has joined the chat.") == 0) {
+        chatio << "/who" << std::endl;
       }
+    }
 
-      // User left message.
-      if (line.length() > 19) {
-        if (line.compare(line.length() - 19, 19,
-                         " has left the chat.") == 0) {
-          chatio << "/who" << std::endl;
-        }
+    // User left message.
+    if (line.length() > 19) {
+      if (line.compare(line.length() - 19, 19,
+                       " has left the chat.") == 0) {
+        chatio << "/who" << std::endl;
       }
+    }
 
-      // Add the new line to the scroll buffer.
-      _scroll_buffer.push_front(line);
-      while (_scroll_buffer.size() > _buffer_size) {
-        _scroll_buffer.pop_back();
-      }
+    // Add the new line to the scroll buffer.
+    _scroll_buffer.push_front(line);
+    while (_scroll_buffer.size() > _buffer_size) {
+      _scroll_buffer.pop_back();
+    }
 
-      // Handle message scrolling in the chat window.
-      if (auto_scroll) {
-        // If auto scroll the reposition buffer to the new line.
-        _buffer_location = 0;
-        redraw();
-      } else if (_buffer_location > 0) {
-        // Update the screen.
-        scroll(SCROLL_UP);
-      } else
-        redraw();
+    // Handle message scrolling in the chat window.
+    if (auto_scroll) {
+      // If auto scroll the reposition buffer to the new line.
+      _buffer_location = 0;
+      redraw();
+    } else if (_buffer_location > 0) {
+      // Update the screen.
+      scroll(SCROLL_UP);
+    } else
+      redraw();
 
-      if (not chatio and not chatio.eof()) {
-        chatio.clear();
-      }
+    if (not chatio and not chatio.eof()) {
+      chatio.clear();
+    }
   }
 
 #ifdef DEBUG
@@ -624,7 +626,7 @@ void input::redraw() {
  * input::key_event *
  ********************/
 
-#define CTRL(c) ((c) & 037)
+#define CTRL(c) ((c) & 0x1f)
 
 void input::key_event(int ch) {
   if (_history_scan) {
@@ -649,6 +651,13 @@ void input::key_event(int ch) {
       _insert = _line.length();
       break;
 
+    case CTRL('g'):
+      _history_scan = false;
+      _line = "";
+      _insert = 0;
+      _suggest = "";
+      break;
+
     case '\n':
       _history_scan = false;
       break;
@@ -660,6 +669,7 @@ void input::key_event(int ch) {
     case ERR: // Keyboard input timeout
       return;
 
+    case KEY_ENTER:
     case '\n': // Send the line to the server and reset the input.
       chatio << _line << std::endl;
       _history.push_back(_line);
@@ -669,8 +679,9 @@ void input::key_event(int ch) {
       _suggest = "";
       break;
 
-    case CTRL('a'): // Toggle auto scroll.
+    case CTRL('u'): // Toggle auto scroll.
       chat::auto_scroll = not chat::auto_scroll;
+      _lchat->update_status();
       break;
 
     case CTRL('p'): // Enter into history mode.
@@ -680,12 +691,12 @@ void input::key_event(int ch) {
       _insert = 0;
       break;
 
-    case CTRL('r'): // Force a redraw of the client.
+    case CTRL('l'): // Force a redraw of the client.
       // We cheat a little here by using the resize event handler.
       _lchat->resize_event();
       break;
 
-    case '\x9': {// Tab key
+    case '\x9': { // Tab key
       bool is_more;
       _line = completion(_line, _suggest, is_more);
       if (not _suggest.empty() and not is_more) {
@@ -695,6 +706,7 @@ void input::key_event(int ch) {
       _insert = _line.size();
       break;
     }
+
     case KEY_BACKSPACE: // Backspace key and variants.
     case '\b':
     case '\x7f':
@@ -705,7 +717,19 @@ void input::key_event(int ch) {
       }
       break;
 
+    case CTRL('k'):
+      _line.erase(_insert);
+      _suggest = "";
+      break;
+
+    case CTRL('g'):
+      _line = "";
+      _insert = 0;
+      _suggest = "";
+      break;
+
     case KEY_DC: // Delete key.
+    case CTRL('d'):
       if (not _line.empty() and _insert < _line.size()) {
         _line.erase(_insert, 1);
         _suggest = "";
@@ -714,6 +738,7 @@ void input::key_event(int ch) {
 
     case KEY_IC: // Insert key, toggles insert/overwrite mode
       insert_mode = (insert_mode ? false : true);
+      _lchat->update_status();
       break;
 
     case KEY_UP:
@@ -725,10 +750,12 @@ void input::key_event(int ch) {
       break;
 
     case KEY_LEFT:
+    case CTRL('b'):
       if (_insert > 0) _insert--;
       break;
 
     case KEY_RIGHT:
+    case CTRL('f'):
       if (_insert < _line.size()) _insert++;
       break;
 
@@ -741,10 +768,12 @@ void input::key_event(int ch) {
       break;
 
     case KEY_HOME:
+    case CTRL('a'):
       _insert = 0;
       break;
 
     case KEY_END:
+    case CTRL('e'):
       _insert = _line.size();
       break;
 
@@ -849,6 +878,14 @@ void lchat::refresh_users(const std::string &list) {
   _userlist.update(list);
 }
 
+/*************************
+ *  lchat::refresh_users *
+ *************************/
+
+void lchat::update_status() {
+  _status.redraw();
+}
+
 /***********************
  *  lchat::operator () *
  ***********************/
@@ -863,7 +900,6 @@ void lchat::operator()() {
   // Our main application loop.
   while (_chat.connected()) {
     curs::events::process();
-    //update();
   }
 
 #ifdef DEBUG
@@ -881,8 +917,6 @@ void lchat::operator()() {
 void lchat::update() {
   _status.redraw();
   _input.redraw();
-
-  //update_term();
 }
 
 /************************
@@ -922,6 +956,7 @@ void lchat::resize_event() {
   debug << " redrawing screen" << std::endl;
 #endif
 
+  curs::terminal::clear();
   _draw(); // Redraw ourself.
   _chat.redraw();
   _userlist.redraw();
@@ -949,6 +984,7 @@ void lchat::_draw() {
         << curs::vline(h - 3)
         << std::flush;
 
+  // Update the terminal.
   curs::terminal::update();
   curs_mtx.unlock();
 }
@@ -1096,7 +1132,6 @@ int main(int argc, char *argv[]) {
   debug.open("lchat.log");
 #endif
 
-
   // Get the command line arguments.
   int opt;
   while ((opt = getopt(argc, argv, ":as:l:b:m:hV?")) != -1) {
@@ -1198,6 +1233,11 @@ int main(int argc, char *argv[]) {
       terminal.cbreak(true);
       terminal.echo(false);
       terminal.halfdelay(10);
+
+      // This is a bit of a hack. When the dispatcher breaks the connection
+      // we get this signal. I believe this because of the threads but haven't
+      // fully tracked this down yet.
+      signal(SIGPIPE, SIG_IGN);
 
       lchat chat_ui;
       chatio << "/who" << std::endl;

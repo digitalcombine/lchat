@@ -1,12 +1,26 @@
+Version 1.6.4
+2023-07-01 Ron Wills <ron@digitalcombine.ca>
+
+* Changed keybinding CTRL-r to CTRL-l
+* Changed keybinding CTRL-a to CTRL-u
+* Fixed redrawing the screen
+* Added an number of common Unix/Emacs editing keybindings
+* Ignored SIGPIPE when the dispatcher closes the connection
+
+Version 1.6.3
+2021-04-08 Ron Wills <ron@digitalcombine.ca>
+
+* The drawing loop has been removed and the terminal updated as needed. This removes flickering on slow connections.
+
 Version 1.6.2
 2021-05-25 Ron Wills <ron@digitalcombine.ca>
 
-* Fixes a blocking issue that only a single client to connect
+* Fixes a blocking issue when only a single client connects
 
 Version 1.6.1
 2021-05-25 Ron Wills <ron@digitalcombine.ca>
 
-* Attempted to fix a blocking issue that only a single client to connect
+* Attempted to fix a blocking issue when only a single client connects
 
 Version 1.6.0
 2021-05-25 Ron Wills <ron@digitalcombine.ca>

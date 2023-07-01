@@ -106,11 +106,25 @@ Scroll the contents of the chat window up and down respectively.
 .IP "Page Up and Page Down"
 Scroll the contents of the chat window up and down the number of line being
 displayed respectively.
-.IP "CTRL-A"
-Toggles the auto scrolling feature on and off.
-.IP "CTRL-R"
+.IP "Left Arrow or CTRL-b"
+This will move the cursor back one character.
+.IP "Right Arrow or CTRL-f"
+This will move the cursor forward one character.
+.IP "DELETE or CTRL-d"
+This will delete the character directly under the cursor.
+.IP "HOME or CTRL-a"
+Moves the cursor to the beginning of the message.
+.IP "HOME or CTRL-e"
+Moves the cursor to the end of the message.
+.IP "CTRL-u"
+Toggles the auto scrolling feature on and off. If auto scrolling is on the chat
+window will automatically get scrolled to the end when a new message is
+received.
+.IP "CTRL-l"
 Completely redraws the client.
-.IP "CTRL-P"
+.IP "CTRL-g"
+Clears any text that was typed, effectively cancelling the message.
+.IP "CTRL-p"
 Changes the input to scroll through past messages sent. The up and down arrow
 keys list through the message history and the enter key will select the
 displayed entry. The input allows the selected message to be edited before it
