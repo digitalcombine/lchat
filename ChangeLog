@@ -1,8 +1,40 @@
-Version 1.6.3
-2023-04-08 Ron Wills <ron@digitalcombine.ca>
+Version 1.7.0
+2023-07-01 Ron Wills <ron@digitalcombine.ca>
 
-* Got rid of update loop and just drawn when needed. This is much friendlier
-over slow connections.
+* Changed keybinding CTRL-r to CTRL-l
+* Changed keybinding CTRL-a to CTRL-u
+* Fixed redrawing the screen
+* Added an number of common Unix/Emacs editing keybindings
+* Ignored SIGPIPE on close of the client
+* Added longopts
+* Man pages converted to mdoc format
+
+Version 1.6.3
+2021-04-08 Ron Wills <ron@digitalcombine.ca>
+
+* The drawing loop has been removed and the terminal updated as needed. This removes flickering on slow connections.
+
+Version 1.6.2
+2021-05-25 Ron Wills <ron@digitalcombine.ca>
+
+* Fixes a blocking issue when only a single client connects
+
+Version 1.6.1
+2021-05-25 Ron Wills <ron@digitalcombine.ca>
+
+* Attempted to fix a blocking issue when only a single client connects
+
+Version 1.6.0
+2021-05-25 Ron Wills <ron@digitalcombine.ca>
+
+* Multi-threaded client which removes and reduces polling between the communication socket and keyboard input.
+* An internal chat history and basic auto-completion.
+* Also many little bug fixes and refinements.
+
+Version 1.5.5
+2021-05-25 Ron Wills <ron@digitalcombine.ca>
+
+* Control-R key binding added to redraw the client
 
 Version 1.5.4
 2021-02-27 Ron Wills <ron@digitalcombine.ca>

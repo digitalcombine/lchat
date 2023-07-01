@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([lchat], [1.6.3], [ron@digitalcombine.ca])
+AC_INIT([lchat], [1.7.0], [ron@digitalcombine.ca])
 AM_INIT_AUTOMAKE
 AM_SILENT_RULES
 AC_CONFIG_SRCDIR([src/lchatd.cpp])
@@ -65,9 +65,9 @@ AC_TYPE_SIZE_T
 # Checks for library functions.
 AC_CHECK_FUNCS([inet_ntoa memset select socket strerror])
 
-AX_CHECK_COMPILE_FLAG([-std=c++11],
-      [AX_APPEND_FLAG([-std=c++11], CXXFLAGS)],
-      AC_MSG_ERROR(C++11 not supported by compiler))
+AX_CHECK_COMPILE_FLAG([-std=c++17],
+      [AX_APPEND_FLAG([-std=c++17], CXXFLAGS)],
+      AC_MSG_ERROR(C++17 not supported by compiler))
 
 AX_PTHREAD(, [AC_MSG_ERROR([Posix thread library not found])])
 
@@ -87,7 +87,5 @@ AC_CONFIG_FILES([Makefile
                  include/Makefile
                  src/Makefile
                  man/Makefile
-		 man/lchat.1
-		 man/lchatd.1
                  extra/Makefile])
 AC_OUTPUT

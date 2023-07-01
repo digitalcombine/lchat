@@ -1,0 +1,219 @@
+.\" Copyright © 2023 Ron R Wills <ron@digitalcombine.ca>
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions are met:
+.\"
+.\" 1. Redistributions of source code must retain the above copyright notice,
+.\"    this list of conditions and the following disclaimer.
+.\"
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice,this list of conditions and the following disclaimer in the
+.\"    documentation and/or other materials provided with the distribution.
+.\"
+.\" 3. Neither the name of the copyright holder nor the names of its
+.\"    contributors may be used to endorse or promote products derived from
+.\"    this software without specific prior written permission.
+.\"
+.\" THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+.\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+.\" IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+.\" ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+.\" LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+.\" CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+.\" SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+.\" INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+.\" CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+.\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+.\" POSSIBILITY OF SUCH DAMAGE.
+.\"
+.Dd July 1, 2023
+.Dt LCHAT 1
+.Os
+.Sh NAME
+.Nm lchat
+.Nd Local chat console client
+.Sh SYNOPSIS
+.Nm
+.Op Fl s | -socket Ar path
+.Op Fl a | -auto-scroll
+.Op Fl l | -scrollback Ar lines
+.Nm
+.Op Fl s | -socket Ar path
+.Op Fl m | -message Ar message
+.Nm
+.Op Fl s | -socket Ar path
+.Op Fl b | -bot Ar command
+.Nm
+.Fl -V | -version
+.Nm
+.Fl -h | -help
+.Sh DESCRIPTION
+.Nm
+is a simple, configuration free, console chat client.
+The local chat suite is a very simple 'IRC-ish' chat system over a Unix socket
+for a single computer/server.
+Ideally the target for this software is for headless servers allowing admins
+and other users to easily communicate with each other on the console.
+.Sh OPTIONS
+.Bl -tag -width Ds
+.It Fl a | -auto-scroll
+Sets the conversation window to automatically scroll to any new messages that
+are received.
+.It Fl l | -scrollback Ar lines
+Specifies the number of lines to be kept in the scroll-back buffer.
+The default is 500 lines.
+.It Fl m | -message Ar message
+Send message to the chat room.
+This allows for scripts and other programs to post messages within the chat
+room.
+If message is excluded from the command line then it is read from standard in.
+.It Fl b | -bot Ar command
+Instead of bring up a user interface, the chat stream is piped to the bot
+.Ar command's
+standard input and output.
+The conversation is read through standard input and the bot can send messages
+to the conversation through standard output.
+The standard error is not redirected and can be used for debugging purposes.
+.Pp
+All chat messages will be sent to the bot and the bot must read them via
+standard input.
+This includes even when the bot is only outputting messages.
+If the bots input is not read this can eventually lockup the
+.Nm lchatd
+server.
+.Pp
+The bot
+.Ar command
+is executed via
+.Nm sh
+.Fl c
+.Ar command .
+A simple trick to replace the shell process with the bot command is to use the
+shell built exec, for example:
+.Nm
+.Fl b
+.Ar 'exec my_bot_script.sh' .
+.It Fl s | -socket Ar path
+Specifies the
+.Ar path
+to the chat servers Unix socket file.
+.It Fl V | -version
+Displays version information.
+.It Fl h | -help
+Displays a very brief help screen.
+.El
+.Sh USER INTERFACE
+The terminal interface is fairly simple.
+Along the top of the window is simply a title bar.
+Just bellow it to the left is the chat window.
+To the right of that is the list of all the users in the chat.
+.Pp
+Next is the status lines.
+On the left side of the status line is the number of users in the chat.
+On the right shows the scroll buffer status: the current line/number of
+buffered lines.
+.Pp
+Next is a number of icons are shown as various status indicators.
+If the
+.Em ↧
+character is displayed the auto scroll feature is enabled otherwise it is
+disabled.
+If an
+.Em i
+is displayed it indicates the input is in insert
+mode an
+.Em o
+indicates the input is in overwrite mode.
+The auto scroll feature always scrolls the chat to show new messages as they
+are received.
+When this feature is turned off the chat display will not be changed as new
+message are received.
+Auto scroll is turn off by default, but
+can be turned on with the
+.Fl a | -auto-scroll
+command line option or toggled on or off with
+.Em CTRL-u .
+At the very bottom is the input window.
+Here just type you message and hit the return key to send it.
+There are several chat server command available which are described in the next
+section.
+.Sh SERVER COMMANDS
+Similar to IRC, the chat daemon understands a few commands that start with the
+.Em /
+character.
+.Bl -tag -width Ds
+.It Sy "/quit, /exit"
+The server will close the connection.
+.It Sy /who
+This returns a list of all the users currently connected to the chat.
+.Nm
+does not display this list in the chat window.
+Instead it reads the results to update its user list window and status line.
+.It Sy "/version, /about"
+Displays version information about the server.
+.It Sy "/msg, /priv, /query user message..."
+Sends a private message to the user.
+.It Sy /help
+Displays a simple help screen.
+.El
+.Sh KEY BINDINGS
+.Bl -tag -width Ds
+.It "Up Arrow and Down Arrow"
+Scroll the contents of the chat window up and down respectively.
+.It "Page Up and Page Down"
+Scroll the contents of the chat window up and down the number of line being
+displayed respectively.
+.It "Left Arrow or CTRL-b"
+This will move the cursor back one character.
+.It "Right Arrow or CTRL-f"
+This will move the cursor forward one character.
+.It "DELETE or CTRL-d"
+This will delete the character directly under the cursor.
+.It "HOME or CTRL-a"
+Moves the cursor to the beginning of the message.
+.It "HOME or CTRL-e"
+Moves the cursor to the end of the message.
+.It "CTRL-u"
+Toggles the auto scrolling feature on and off.
+If auto scrolling is on the chat window will automatically get scrolled to the
+end when a new message is received.
+.It "CTRL-l"
+Completely redraws the client.
+.It "CTRL-g"
+Clears any text that was typed, effectively cancelling the message.
+.It "CTRL-p"
+Changes the input to scroll through past messages sent.
+The up and down arrow keys list through the message history and the enter key
+will select the displayed entry.
+The input allows the selected message to be edited before it is sent.
+.It "Tab"
+The tab key attempts to finish what you have started typing.
+It uses the server commands and history to do this.
+If it cannot find a unique answer, it displays the first thing it finds in a
+dimmed color.
+.Pp
+The input window has many of the standard editing keys available.
+The left, right, home and end keys move the cursor.
+The delete and backspace keys delete characters accordingly.
+Finally the insert key toggles the input between insert and overwrite modes.
+.El
+.Sh SEE ALSO
+.Xr lchatd 1
+.Sh AUTHORS
+Written by
+.An Ron R Wills
+.Sh BUGS
+Although the
+.Nm
+client is completely Unicode enabled the input is not capable yet to handle
+Unicode input.
+This is because the internal insert pointer not be smart enough to work with
+multi-byte characters yet.
+.Pp
+Badly written bots that never read the chat messages from their standard input
+can eventually lockup the
+.Nm lchatd
+server.
+.Pp
+Send any bugs reports to
+.Mt Ron R Wills <ron@digitalcombine.ca> .
