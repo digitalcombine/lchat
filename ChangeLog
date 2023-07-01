@@ -1,4 +1,4 @@
-Version 1.6.4
+Version 1.7.0
 2023-07-01 Ron Wills <ron@digitalcombine.ca>
 
 * Changed keybinding CTRL-r to CTRL-l
@@ -6,6 +6,8 @@ Version 1.6.4
 * Fixed redrawing the screen
 * Added an number of common Unix/Emacs editing keybindings
 * Ignored SIGPIPE when the dispatcher closes the connection
+* Added longopts
+* Man pages converted to mdoc format
 
 Version 1.6.3
 2021-04-08 Ron Wills <ron@digitalcombine.ca>

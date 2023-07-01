@@ -1,0 +1,118 @@
+.Dd July 1, 2023
+.Dt LCHATD 1
+.Os
+.Sh NAME
+.Nm lchatd
+.Nd Local chat daemon and dispatcher
+.Sh SYNOPSIS
+.Nm
+.Op Fl d
+.Op Fl s | -socket Ar path
+.Op Fl u | -user Ar user
+.Op Fl g | -group Ar group
+.Op Fl w | -work-directory Ar path
+.Nm
+.Fl V | -version
+.Nm
+.Fl h | -help
+.Sh DESCRIPTION
+.Nm
+is a simple, configuration free,
+.Em IRC-ish
+chat server that dispatches messages over a local Unix socket for a single
+computer/server.
+Ideally the target for this software is for headless servers allowing admins
+and other users to easily communicate on the console.
+.Pp
+There is no real protocol involved, what you type is what is send over the
+socket.
+To send a message to everyone, simple send a line of text terminated by the
+newline character.
+.Pp
+Similar to IRC, the chat daemon understands a few command that start with the
+.Em /
+character.
+.Bl -tag -width Ds
+.It Sy "/quit, /exit"
+The server will close the connection.
+.It Sy /who
+Returns a list of the current users in the chat room.
+The list starts with
+.Em ~
+so clients can easily identify it to update any user lists it might display.
+For example the /who command may return:
+.Em ~ root john paul george ringo
+.It Sy "/version, /about"
+Displays version information about the server.
+.It Sy "/msg, /priv, /query user message..."
+Sends a private message to the given user.
+.It Sy /help
+Displays a simple help screen.
+.El
+.Pp
+Messages sent from the dispatcher to the clients may have some simple
+punctuation prepended to it, indicated the source of the message.
+.Bl -tag -width Ds
+.It Em sender\&:
+Normal message sent to all the users from
+.Em sender .
+.It Em sender\&:
+.It Em ^receiver\&:
+Private message sent from
+.Em sender .
+When a private message has the
+.Em ^
+symbol before the
+.Em receiver's
+name the message was sent by the user and returned to the user by the
+dispatcher to keep the conversation displayed by the client consistent.
+.It Em \&?
+Help message sent by the chat server.
+.El
+.Pp
+Everything else is considered system information, usually the server responding
+to a server command.
+.Sh OPTIONS
+.Bl -tag -width Ds
+.It Fl d | -daemon
+Puts the program in the background as a system daemon.
+.It Fl s | -socket Ar path
+Specifies the
+.Ar path
+to the chat servers Unix socket file.
+The default path is
+.Em /var/lib/lchat/sock .
+.It Fl u | -user Ar user
+Specifies the user to change the Unix socket to and if possible change the uid
+for
+.Nm
+as well.
+If
+.Nm
+is started with root privileges and this option
+is not specified then the option
+.Fl u
+.Ar nobody
+is the default.
+.It Fl g | -group Ar group
+Specifies the group to change the Unix socket to and if possible change the gid
+for
+.Nm
+as well.
+This should be set to a group for login users only and prevent other system
+services from being able to access the chat service.
+.It Fl w | -working-directory Ar path
+Set the working path for the daemon.
+Ideally, this should be set to the directory where the Unix socket is found.
+The default is
+.Em /var/lib/lchat .
+.It Fl V | -version
+Displays version information.
+.It Fl h | -help
+Displays a very brief help screen.
+.El
+.Sh "SEE ALSO"
+.Xr lchat 1
+.Sh AUTHORS
+Written by
+.An Ron R Wills

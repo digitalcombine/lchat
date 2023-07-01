@@ -1,5 +1,5 @@
 /*                                                                  -*- c++ -*-
- * Copyright © 2018 Ron R Wills <ron@digitalcombine.ca>
+ * Copyright © 2018-2023 Ron R Wills <ron@digitalcombine.ca>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -673,7 +673,9 @@ void sockets::server_base::process_requests() {
         /* Data arriving on an already-connected socket. */
         _clients[i]->recv();
         if (not _clients[i]->ios or _clients[i]->ios.eof()) {
+#ifdef DEBUG_NSTREAM
           std::clog << "Connection closed" << std::endl;
+#endif
 
           auto tmp = _clients[i];
           _clients.erase(i);  // Remove the client from our list.
