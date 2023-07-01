@@ -1257,11 +1257,6 @@ int main(int argc, char *argv[]) {
       terminal.echo(false);
       terminal.halfdelay(10);
 
-      // This is a bit of a hack. When the dispatcher breaks the connection
-      // we get this signal. I believe this because of the threads but haven't
-      // fully tracked this down yet.
-      signal(SIGPIPE, SIG_IGN);
-
       lchat chat_ui;
       chatio << "/who" << std::endl;
 
