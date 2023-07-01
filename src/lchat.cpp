@@ -192,7 +192,7 @@ namespace {
 
   protected:
     // Key event handler.
-    void key_event(int ch);
+    virtual void key_event(int ch) override;
 
   private:
     // Reference to the chat interface.
@@ -230,7 +230,7 @@ namespace {
     friend class input;
 
   private:
-    void resize_event();
+    virtual void resize_event() override;
 
   private:
     chat _chat;

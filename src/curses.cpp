@@ -287,7 +287,7 @@ curs::windowbuf::~windowbuf() noexcept {
 
 curs::windowbuf::int_type curs::windowbuf::overflow(int_type ch) {
   if (ch != traits_type::eof()) {
-    *pptr() = ch;
+    *pptr() = static_cast<char>(ch);
     pbump(1);
   }
 
@@ -311,17 +311,17 @@ int curs::windowbuf::sync() {
  ***************************/
 
 bool curs::windowbuf::oflush() {
-  int wlen = pptr() - pbase();
+  auto wlen = pptr() - pbase();
   char *buf = pbase();
 
   if (wlen > 0) {
     if (_use_stdscr) {
-      int result = ::waddnstr(::stdscr, buf, wlen);
+      int result = ::waddnstr(::stdscr, buf, static_cast<int>(wlen));
       if (result == ERR) return false;
 
       ::wnoutrefresh(::stdscr);
     } else {
-      int result = ::waddnstr(_window, buf, wlen);
+      int result = ::waddnstr(_window, buf, static_cast<int>(wlen));
       if (result == ERR) return false;
 
       ::wnoutrefresh(_window);
@@ -371,7 +371,7 @@ curs::padbuf::~padbuf() noexcept {
 
 curs::padbuf::int_type curs::padbuf::overflow(int_type ch) {
   if (ch != traits_type::eof()) {
-    *pptr() = ch;
+    *pptr() = static_cast<char>(ch);
     pbump(1);
   }
 
@@ -395,11 +395,11 @@ int curs::padbuf::sync() {
  ************************/
 
 bool curs::padbuf::oflush() {
-  int wlen = pptr() - pbase();
+  auto wlen = pptr() - pbase();
   char *buf = pbase();
 
   if (wlen > 0) {
-    int result = ::waddnstr(_pad, buf, wlen);
+    int result = ::waddnstr(_pad, buf, static_cast<int>(wlen));
     if (result == ERR) return false;
 
     pnoutrefresh(_pad, _y, _x, dest_y, dest_x,

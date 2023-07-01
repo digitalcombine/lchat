@@ -56,11 +56,13 @@ namespace sockets {
     exception (const exception &other) noexcept;
     explicit exception (const char *message) noexcept;
     explicit exception (const std::string &message) noexcept;
-    virtual ~exception() noexcept;
+    virtual ~exception() noexcept override;
 
     exception& operator= (const exception&) noexcept;
 
-    virtual const char* what() const noexcept { return message.c_str(); }
+    virtual const char* what() const noexcept override {
+      return message.c_str();
+    }
 
   private:
     std::string message;
@@ -69,13 +71,13 @@ namespace sockets {
   class ionotready : public exception {
   public:
     ionotready() noexcept;
-    virtual ~ionotready() noexcept;
+    virtual ~ionotready() noexcept override;
   };
 
   class timeout : public exception {
   public:
     timeout() noexcept;
-    virtual ~timeout() noexcept;
+    virtual ~timeout() noexcept override;
   };
 
   /** Socket Stream Buffer
@@ -83,7 +85,7 @@ namespace sockets {
   class socketbuf : public std::streambuf {
   public:
     socketbuf(size_t buffer = 1024);
-    virtual ~socketbuf() noexcept;
+    virtual ~socketbuf() noexcept override;
 
     /** Open a TCP/IP connection to the given host and service.
      */
@@ -106,10 +108,10 @@ namespace sockets {
     friend std::istream &msgdontwait(std::istream &ios);
 
   protected:
-    virtual int_type overflow(int_type ch);
-    virtual int sync();
+    virtual int_type overflow(int_type ch) override;
+    virtual int sync() override;
 
-    virtual int_type underflow();
+    virtual int_type underflow() override;
 
   private:
     int _fd;
@@ -133,6 +135,7 @@ namespace sockets {
     iostream(const std::string &hostname, const std::string &service,
              size_t buffer = 1024);
     iostream(const std::string &filename, size_t buffer = 1024);
+    virtual ~iostream() noexcept override;
 
     inline void open(const std::string &hostname, const std::string &service) {
       _sockbuf.open(hostname, service);
@@ -163,7 +166,7 @@ namespace sockets {
   template <class Ty>
   class osmanip {
   public:
-    explicit osmanip(Ty arg) : arg(arg) {}
+    explicit osmanip(Ty a) : arg(a) {}
 
     virtual std::ostream &operator()(std::ostream &is) const = 0;
 
@@ -174,7 +177,8 @@ namespace sockets {
   template <class Ty>
   class ismanip {
   public:
-    explicit ismanip(Ty arg) : arg(arg) {}
+    explicit ismanip(Ty a) : arg(a) {}
+    virtual ~ismanip() noexcept {}
 
     virtual std::istream &operator()(std::istream &is) const = 0;
 
@@ -195,8 +199,8 @@ namespace sockets {
 
   class recvtimeout : public ismanip<timeval> {
   public:
-    recvtimeout(timeval &arg) : ismanip(arg) {}
-    virtual std::istream &operator()(std::istream &ios) const;
+    recvtimeout(timeval &a) : ismanip(a) {}
+    virtual std::istream &operator()(std::istream &ios) const override;
   };
 
   /** Server Client Connection.
@@ -237,7 +241,7 @@ namespace sockets {
 
     void process_requests();
 
-    void operator()();
+    [[noreturn]] void operator()();
 
     iterator begin() { return _clients.begin(); }
     iterator end() { return _clients.end(); }

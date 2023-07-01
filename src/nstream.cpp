@@ -64,12 +64,12 @@ sockets::exception::exception (const exception &other) noexcept
   : message(other.message) {
 }
 
-sockets::exception::exception (const char *message) noexcept
-  : message(message) {
+sockets::exception::exception (const char *mesg) noexcept
+  : message(mesg) {
 }
 
-sockets::exception::exception (const std::string &message) noexcept
-  : message(message) {
+sockets::exception::exception (const std::string &mesg) noexcept
+  : message(mesg) {
 }
 
 /**********************************
@@ -171,7 +171,7 @@ sockets::socketbuf *sockets::socketbuf::open(const std::string &hostname,
   hints.ai_flags = AI_CANONNAME;
   hints.ai_protocol = 0;           // Any protocol
 
-  int res = getaddrinfo(hostname.c_str(), service.c_str(), &hints, &info);
+  auto res = getaddrinfo(hostname.c_str(), service.c_str(), &hints, &info);
   if (res != 0)
     throw sockets::exception(gai_strerror(res));
 
@@ -216,7 +216,7 @@ sockets::socketbuf *sockets::socketbuf::open(const std::string &filename) {
   memset(&addr, 0, sizeof(addr));
   addr.sun_family = AF_UNIX;
   strncpy(addr.sun_path, filename.c_str(), sizeof(addr.sun_path) - 1);
-  if (connect(_fd, (struct sockaddr *)&addr,
+  if (connect(_fd, reinterpret_cast<struct sockaddr *>(&addr),
               sizeof(struct sockaddr_un)) < 0) {
     throw sockets::exception(
       std::string("Unable to connect to unix domain socket ") +
@@ -251,7 +251,7 @@ void sockets::socketbuf::close() {
 
 sockets::socketbuf::int_type sockets::socketbuf::overflow(int_type ch) {
   if (ch != traits_type::eof()) {
-    *pptr() = ch;
+    *pptr() = static_cast<char>(ch);
     pbump(1);
   }
 
@@ -276,7 +276,7 @@ int sockets::socketbuf::sync() {
 sockets::socketbuf::int_type sockets::socketbuf::underflow() {
   if (gptr() >= egptr()) {
     // The buffer has been exhausted, read more in from the socket.
-    int res = recv(_fd, &_ibuf.front(), _ibuf.size(), _rflags);
+    auto res = recv(_fd, &_ibuf.front(), _ibuf.size(), _rflags);
 
     if (res == 0) {
       // End of file, usually it was disconnected.
@@ -319,12 +319,14 @@ sockets::socketbuf::int_type sockets::socketbuf::underflow() {
  ******************************/
 
 bool sockets::socketbuf::oflush() {
-  int wlen = pptr() - pbase();
+  auto wlen = pptr() - pbase();
   char *buf = pbase();
 
   // Write the entire buffer to the socket.
   do {
-    int wrote = send(_fd, buf, wlen, _sflags);
+    auto wrote = send(_fd, buf,
+                      (wlen >= 0 ? static_cast<size_t>(wlen) : 0),
+                      _sflags | MSG_NOSIGNAL);
     if (wrote == -1) return false;
     buf += wrote;
     wlen -= wrote;
@@ -365,6 +367,8 @@ sockets::iostream::iostream(int sockfd, size_t buffer)
   : std::iostream(&_sockbuf), _sockbuf(sockfd, buffer) {
 }
 
+sockets::iostream::~iostream() noexcept {}
+
 /****************************
  * sockets::iostream::close *
  ****************************/
@@ -403,7 +407,7 @@ std::istream &sockets::nonblock(std::istream &ios) {
 std::istream &sockets::block(std::istream &ios) {
   iostream *iosptr = dynamic_cast<iostream *>(&ios);
   if (iosptr != NULL and iosptr->is_open()) {
-    int flags = fcntl(iosptr->_sockbuf.socket(), F_GETFL, 0);
+    auto flags = fcntl(iosptr->_sockbuf.socket(), F_GETFL, 0);
     if (fcntl(iosptr->_sockbuf.socket(), F_SETFL, flags & ~O_NONBLOCK) < 0)
       throw sockets::exception((std::string("Setting blocking failed: ") +
                                 strerror(errno)).c_str());
@@ -591,8 +595,10 @@ void sockets::server_base::open(const std::string &filename) {
 
   memset(&addr, 0, sizeof(addr));
   addr.sun_family = AF_UNIX;
-  strncpy(addr.sun_path, (char *)filename.c_str(), sizeof(addr.sun_path) - 1);
-  if (bind(sockfd, (const sockaddr *)&addr, sizeof(addr)) == -1) {
+  const char *fname = filename.c_str();
+  strncpy(addr.sun_path, fname, sizeof(addr.sun_path) - 1);
+  if (bind(sockfd, reinterpret_cast<const sockaddr *>(&addr),
+           sizeof(addr)) == -1) {
     ::close(sockfd);
     sockfd = -1;
     throw sockets::exception(std::string("Unable able to bind to ") +
@@ -603,7 +609,7 @@ void sockets::server_base::open(const std::string &filename) {
     throw sockets::exception(std::string("Unable able to listen to ") +
                              filename + ": " + strerror(errno));
 
-  int flags = fcntl(sockfd, F_GETFL, 0);
+  auto flags = fcntl(sockfd, F_GETFL, 0);
   if (fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) < 0)
     throw sockets::exception(std::string("Setting nonblocking failed: ") +
                              strerror(errno));
@@ -642,7 +648,7 @@ void sockets::server_base::process_requests() {
   }
 
   /* Service all the sockets with input pending. */
-  for (int i = 0; i < FD_SETSIZE; ++i)
+  for (auto i = 0; i < FD_SETSIZE; ++i)
     if (FD_ISSET (i, &read_fd_set)) {
 
       if (i == sockfd) {
@@ -652,7 +658,9 @@ void sockets::server_base::process_requests() {
 
         // Attempt to accept the connection.
         socklen_t size = sizeof(clientname);
-        newfd = accept(sockfd, (struct sockaddr *)&clientname, &size);
+        newfd = accept(sockfd,
+                       reinterpret_cast<struct sockaddr *>(&clientname),
+                       &size);
         if (newfd < 0) {
           std::clog << "Unable to accept connection: "
                     << strerror(errno) << std::endl;

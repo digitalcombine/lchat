@@ -110,13 +110,13 @@ namespace curs {
   public:
     windowbuf(WINDOW *win, bool free_window = false, size_t buffer = 2048);
     windowbuf(const windowbuf &other) = delete;
-    virtual ~windowbuf() noexcept;
+    virtual ~windowbuf() noexcept override;
 
     WINDOW *window() const { return _window; }
 
   protected:
-    virtual int_type overflow(int_type ch);
-    virtual int sync();
+    virtual int_type overflow(int_type ch) override;
+    virtual int sync() override;
 
   private:
     WINDOW *_window;
@@ -135,13 +135,13 @@ namespace curs {
     padbuf(WINDOW *win, int x, int y, int width, int height,
            size_t buffer = 2048);
     padbuf(int width, int height, size_t buffer = 2048);
-    virtual ~padbuf() noexcept;
+    virtual ~padbuf() noexcept override;
 
     WINDOW *window() const { return _pad; }
 
   protected:
-    virtual int_type overflow(int_type ch);
-    virtual int sync();
+    virtual int_type overflow(int_type ch) override;
+    virtual int sync() override;
 
   private:
     WINDOW *_pad;
@@ -159,7 +159,7 @@ namespace curs {
   class base_ostream : public std::ostream {
   public:
     explicit base_ostream(std::streambuf* sb) : std::ostream(sb) {}
-    virtual ~base_ostream() noexcept;
+    virtual ~base_ostream() noexcept override;
 
     /** Return the position of the cursor.
      */
@@ -221,16 +221,16 @@ namespace curs {
     window(int x, int y, int width, int height);
     window(const window &parent, int x, int y, int width, int height);
     window(const window &other) = delete;
-    virtual ~window() noexcept;
+    virtual ~window() noexcept override;
 
-    virtual operator WINDOW *() const;
+    virtual operator WINDOW *() const override;
 
   private:
     //window *_parent;
     windowbuf _windowbuf;
 
-    virtual void noutrefresh() const;
-    virtual void refresh() const;
+    virtual void noutrefresh() const override;
+    virtual void refresh() const override;
   };
 
   /**
@@ -240,16 +240,16 @@ namespace curs {
     pad(int width, int height);
     pad(const base_ostream &parent, int x, int y, int width, int height);
     pad(const pad &other) = delete;
-    virtual ~pad() noexcept;
+    virtual ~pad() noexcept override;
 
-    virtual operator WINDOW *() const;
+    virtual operator WINDOW *() const override;
 
   private:
     //window *_parent;
     padbuf _padbuf;
 
-    virtual void noutrefresh() const;
-    virtual void refresh() const;
+    virtual void noutrefresh() const override;
+    virtual void refresh() const override;
   };
 
   /***************************************************************************
@@ -300,7 +300,7 @@ namespace curs {
   class keypad : public osmanip {
   public:
     explicit keypad(bool use) : _use(use) {}
-    virtual std::ostream &operator()(std::ostream &os) const;
+    virtual std::ostream &operator()(std::ostream &os) const override;
   private:
     bool _use;
   };
@@ -308,7 +308,7 @@ namespace curs {
   class nodelay : public osmanip {
   public:
     explicit nodelay(bool value) : _value(value) {}
-    virtual std::ostream &operator()(std::ostream &os) const;
+    virtual std::ostream &operator()(std::ostream &os) const override;
   private:
     bool _value;
   };
@@ -316,7 +316,7 @@ namespace curs {
   class scrollok : public osmanip {
   public:
     explicit scrollok(bool value) : _value(value) {}
-    virtual std::ostream &operator()(std::ostream &os) const;
+    virtual std::ostream &operator()(std::ostream &os) const override;
   private:
     bool _value;
   };
@@ -324,7 +324,7 @@ namespace curs {
   class leaveok : public osmanip {
   public:
     explicit leaveok(bool value) : _value(value) {}
-    virtual std::ostream &operator()(std::ostream &os) const;
+    virtual std::ostream &operator()(std::ostream &os) const override;
   private:
     bool _value;
   };
@@ -332,7 +332,7 @@ namespace curs {
   class idlok : public osmanip {
   public:
     explicit idlok(bool value) : _value(value) {}
-    virtual std::ostream &operator()(std::ostream &os) const;
+    virtual std::ostream &operator()(std::ostream &os) const override;
   private:
     bool _value;
   };
@@ -340,7 +340,7 @@ namespace curs {
   class syncok : public osmanip {
   public:
     explicit syncok(bool value) : _value(value) {}
-    virtual std::ostream &operator()(std::ostream &os) const;
+    virtual std::ostream &operator()(std::ostream &os) const override;
   private:
     bool _value;
   };
@@ -348,7 +348,7 @@ namespace curs {
   class setscrreg : public osmanip {
   public:
     explicit setscrreg(int top, int bottom) : _top(top), _bottom(bottom) {}
-    virtual std::ostream &operator()(std::ostream &os) const;
+    virtual std::ostream &operator()(std::ostream &os) const override;
   private:
     int _top, _bottom;
   };
@@ -356,7 +356,7 @@ namespace curs {
   class attron : public osmanip {
   public:
     explicit attron(int attr) : _attr(attr) {}
-    virtual std::ostream &operator()(std::ostream &os) const;
+    virtual std::ostream &operator()(std::ostream &os) const override;
   private:
     int _attr;
   };
@@ -364,7 +364,7 @@ namespace curs {
   class attroff : public osmanip {
   public:
     explicit attroff(int attr) : _attr(attr) {}
-    virtual std::ostream &operator()(std::ostream &os) const;
+    virtual std::ostream &operator()(std::ostream &os) const override;
   private:
     int _attr;
   };
@@ -372,7 +372,7 @@ namespace curs {
   class attrset : public osmanip {
   public:
     explicit attrset(int attr) : _attr(attr) {}
-    virtual std::ostream &operator()(std::ostream &os) const;
+    virtual std::ostream &operator()(std::ostream &os) const override;
   private:
     int _attr;
   };
@@ -380,7 +380,7 @@ namespace curs {
   class pairon : public osmanip {
   public:
     explicit pairon(short color_pair) : _color_pair(color_pair) {}
-    virtual std::ostream &operator()(std::ostream &os) const;
+    virtual std::ostream &operator()(std::ostream &os) const override;
   private:
     short _color_pair;
   };
@@ -388,7 +388,7 @@ namespace curs {
   class pairoff : public osmanip {
   public:
     explicit pairoff(short color_pair) : _color_pair(color_pair) {}
-    virtual std::ostream &operator()(std::ostream &os) const;
+    virtual std::ostream &operator()(std::ostream &os) const override;
   private:
     short _color_pair;
   };
@@ -396,7 +396,7 @@ namespace curs {
   class bkgrnd : public osmanip {
   public:
     explicit bkgrnd(const cchar &character) :  _character(character) {}
-    virtual std::ostream &operator()(std::ostream &os) const;
+    virtual std::ostream &operator()(std::ostream &os) const override;
 
   private:
 #ifdef HAVE_NCURSESW_H
@@ -409,7 +409,7 @@ namespace curs {
   class bkgrndset : public osmanip {
   public:
     explicit bkgrndset(const cchar &character) :  _character(character) {}
-    virtual std::ostream &operator()(std::ostream &os) const;
+    virtual std::ostream &operator()(std::ostream &os) const override;
 
   private:
 #ifdef HAVE_NCURSESW_H
@@ -423,7 +423,7 @@ namespace curs {
   public:
     explicit cursor(int x, int y) : _op(POSITION), _x(x), _y(y) {}
     explicit cursor(bool show) : _op(VISIBLITY), _show(show) {}
-    virtual std::ostream &operator()(std::ostream &os) const;
+    virtual std::ostream &operator()(std::ostream &os) const override;
   private:
     enum {POSITION, VISIBLITY} _op;
     int _x, _y;
@@ -440,7 +440,7 @@ namespace curs {
       : _move(true), _x(x), _y(y), _character(nullptr), _length(length) {}
     explicit hline(int x, int y, int length, const cchar &character)
       : _move(true), _x(x), _y(y), _character(character), _length(length) {}
-    virtual std::ostream &operator()(std::ostream &os) const;
+    virtual std::ostream &operator()(std::ostream &os) const override;
   private:
     bool _move;
     int _x, _y;
@@ -458,7 +458,7 @@ namespace curs {
       : _move(true), _x(x), _y(y), _character(nullptr), _length(length) {}
     explicit vline(int x, int y, int length, const cchar &character)
       : _move(true), _x(x), _y(y), _character(character), _length(length) {}
-    virtual std::ostream &operator()(std::ostream &os) const;
+    virtual std::ostream &operator()(std::ostream &os) const override;
   private:
     bool _move;
     int _x, _y;
@@ -471,7 +471,7 @@ namespace curs {
     box() : _horch(nullptr), _verch(nullptr) {}
     explicit box(const cchar &horch, const cchar &verch)
       : _horch(horch), _verch(verch) {}
-    virtual std::ostream &operator()(std::ostream &os) const;
+    virtual std::ostream &operator()(std::ostream &os) const override;
   private:
     const cchar_t *_horch, *_verch;
   };
@@ -484,7 +484,7 @@ namespace curs {
                     const cchar_t *bl = nullptr, const cchar_t *br = nullptr)
       : _ls(ls), _rs(rs), _ts(ts), _bs(bs), _tl(tl), _tr(tr), _bl(bl),
         _br(br) {}
-    virtual std::ostream &operator()(std::ostream &os) const;
+    virtual std::ostream &operator()(std::ostream &os) const override;
   private:
     const cchar_t *_ls, *_rs, *_ts, *_bs, *_tl, *_tr, *_bl, *_br;
   };
@@ -493,7 +493,7 @@ namespace curs {
   public:
     explicit resize(int width, int height)
       : _width(width), _height(height) {}
-    virtual std::ostream &operator()(std::ostream &os) const;
+    virtual std::ostream &operator()(std::ostream &os) const override;
   private:
     int _width, _height;
   };
@@ -501,7 +501,7 @@ namespace curs {
   class move : public osmanip {
   public:
     explicit move(int x, int y) : _x(x), _y(y) {}
-    virtual std::ostream &operator()(std::ostream &os) const;
+    virtual std::ostream &operator()(std::ostream &os) const override;
   private:
     int _x, _y;
   };

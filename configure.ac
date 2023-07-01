@@ -65,9 +65,9 @@ AC_TYPE_SIZE_T
 # Checks for library functions.
 AC_CHECK_FUNCS([inet_ntoa memset select socket strerror])
 
-AX_CHECK_COMPILE_FLAG([-std=c++11],
-      [AX_APPEND_FLAG([-std=c++11], CXXFLAGS)],
-      AC_MSG_ERROR(C++11 not supported by compiler))
+AX_CHECK_COMPILE_FLAG([-std=c++17],
+      [AX_APPEND_FLAG([-std=c++17], CXXFLAGS)],
+      AC_MSG_ERROR(C++17 not supported by compiler))
 
 AX_PTHREAD(, [AC_MSG_ERROR([Posix thread library not found])])
 
