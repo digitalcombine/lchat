@@ -91,7 +91,6 @@ void curs::terminal::update() {
   //debug_log << "TERM: update" << std::endl;
 #endif
   ::doupdate();
-  //::refresh();
 }
 
 /**************************
@@ -156,7 +155,6 @@ curs::terminal::terminal() : screen(nullptr) {
       debug_log.open("curses.log");
   debug_log << "TERM: Initializing" << std::endl;
 #endif
-  //std::setlocale(LC_ALL, "");
   ::initscr();
 
   screen = set_term(nullptr);
