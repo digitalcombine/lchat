@@ -5,7 +5,7 @@ Version 1.7.0
 * Changed keybinding CTRL-a to CTRL-u
 * Fixed redrawing the screen
 * Added an number of common Unix/Emacs editing keybindings
-* Ignored SIGPIPE when the dispatcher closes the connection
+* Ignored SIGPIPE on close of the client
 * Added longopts
 * Man pages converted to mdoc format
 

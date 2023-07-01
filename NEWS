@@ -1,3 +1,15 @@
+Version 1.7
+===========
+
+This a more mature release of the software suite. With many little bugs fixed,
+there has been several key binding changes that are common on Unix systems and adds better usability.
+
+Version 1.6
+===========
+
+A new multithreaded client release with many performance improvements.
+
 Version 1.5
 ===========
-- A polished release.
+
+A polished release.
