@@ -636,7 +636,7 @@ namespace {
 
   static void help() {
     std::cout << "Local Chat Dispatcher v" VERSION << "\n"
-              << "  lchatd [-d|--deamon] [-s|--socket path]\n"
+              << "  lchatd [-d|--daemon] [-s|--socket path]\n"
               << "         [-u|--user user] [-g|--group group]\n"
               << "         [-w|--working-directory path]\n"
               << "  lchatd -V|--version\n"
