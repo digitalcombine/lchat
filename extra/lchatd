@@ -10,7 +10,7 @@ name="lchatd"
 rcvar=lchatd_enable
 
 command="/usr/local/sbin/${name}"
-command_args="--deamon"
+command_args="--daemon"
 
 load_rc_config $name
 
