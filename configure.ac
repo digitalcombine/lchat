@@ -64,6 +64,7 @@ AC_TYPE_SIZE_T
 
 # Checks for library functions.
 AC_CHECK_FUNCS([inet_ntoa memset select socket strerror])
+AC_CHECK_FUNCS([gethostname])
 
 AX_CHECK_COMPILE_FLAG([-std=c++17],
       [AX_APPEND_FLAG([-std=c++17], CXXFLAGS)],
