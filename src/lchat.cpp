@@ -31,6 +31,10 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#if __cplusplus < 201703L
+#error This file requires compiler and library support for the ISO C++ 2017 standard.
+#endif // __cplusplus
+
 #include "nstream"
 #include "curses"
 #include "autocomplete.h"
@@ -52,64 +56,54 @@
 
 #ifdef DEBUG
 #include <fstream>
-#endif
+#endif // DEBUG
 
 namespace {
 #ifdef DEBUG
   std::ofstream debug;
-#endif
+#endif // DEBUG
 
   // Curses color numeric ids.
-  static int C_TITLE      = 1;
-  static int C_USERNAME   = 2;
-  static int C_MYMESSAGE  = 3;
-  static int C_HLPMSG     = 4;
-  static int C_SYSMSG     = 5;
-  static int C_PRVMSG     = 6;
-  static int C_STATUS     = 7;
-  static int C_STATUS_ON  = 8;
-  static int C_STATUS_OFF = 9;
-  static int C_HISTORY    = 10;
+  const int C_TITLE      = 1;
+  const int C_USERNAME   = 2;
+  const int C_MYMESSAGE  = 3;
+  const int C_HLPMSG     = 4;
+  const int C_SYSMSG     = 5;
+  const int C_PRVMSG     = 6;
+  const int C_STATUS     = 7;
+  const int C_STATUS_ON  = 8;
+  const int C_STATUS_OFF = 9;
+  const int C_DIVIDER    = 10;
+  const int C_HISTORY    = 11;
 
   // Global data.
-  static sockets::iostream chatio;
-  static std::string sock_path = STATEDIR "/sock";
-  static std::string my_name;
+  sockets::iostream chatio;
+  std::string sock_path = STATEDIR "/sock";
+  std::string my_name;
 
-  static curs::cchar bgstatus(C_STATUS, U' ');
+  curs::cchar bgstatus(C_STATUS, U' ');
 
   // Mutex to synchronize all curses drawing operations.
-  static std::mutex curs_mtx;
+  std::mutex curs_mtx;
 
-  static autocomplete completion;
+  autocomplete completion;
 
   /****************************************************************************
+   * Terminal UI Classes
    */
 
   class lchat;
   class status;
 
-  /** The Chat Window.
-   */
   class chat : public curs::window {
   public:
     typedef enum {SCROLL_UP, SCROLL_DOWN, PAGE_UP, PAGE_DOWN} scroll_t;
 
-    /** Creates a new chat window.
-     */
     chat(lchat &chatw, int x, int y, int width, int height);
 
-    /** Scroll the chat within the window, either by a single line or by a
-     * page.
-     *
-     * @param value How the chat is scrolled.
-     */
     void scroll(scroll_t value);
-
     static void thread_loop(chat *obj);
-
     void redraw();
-
     bool connected() const { return _connected; }
 
     static bool auto_scroll;
@@ -121,32 +115,18 @@ namespace {
 
     void read_server();
 
-    /** Display a line of the chat with in the window. This applies all the
-     * syntax highlighting to the chat.
-     * @param line The chat line to render to the window.
-     */
     void draw(const std::string &line);
 
   private:
-    /** Reference to the toplevel local chat window. */
-    lchat *_lchat;
+    lchat *_lchat; // Reference to the chat interface.
 
-    /** The buffered chat. */
-    std::list<std::string> _scroll_buffer;
-
-    /** The maximum lines kept by the scroll buffer. */
-    unsigned int _buffer_size;
-
-    /** The location in the scroll buffer to start displaying the chat from.
-     * This is used to scroll the chat window.
-     */
-    unsigned int _buffer_location;
+    std::list<std::string> _scroll_buffer; // Scrollback buffer.
+    unsigned int _buffer_size;             // Scrollback buffer size.
+    unsigned int _buffer_location;         // Scrollback buffer location.
 
     bool _connected;
   };
 
-  /** The Userlist Window.
-   */
   class userlist : public curs::window {
   public:
     userlist(int x, int y, int width, int height);
@@ -162,12 +142,6 @@ namespace {
     std::list<std::string> _autocomp;
   };
 
-  /** The Status Line.
-   *
-   * This typically shows the number of unique users connected, scroll lines
-   * and other information.
-   */
-
   class status : public curs::window {
   public:
     status(chat &ch, userlist &ul, int x, int y, int width, int height);
@@ -175,15 +149,10 @@ namespace {
     void redraw();
 
   private:
-    /** Reference to the chat window. */
-    chat *_chat;
-
-    /** Reference to the user list window. */
-    userlist *_userlist;
+    chat *_chat; // Reference to the chat window.
+    userlist *_userlist; // Reference to the user list window.
   };
 
-  /** The chat's input.
-   */
   class input : public curs::window, curs::keyboard_event_handler {
   public:
     input(lchat &chat, int x, int y, int width, int height);
@@ -191,16 +160,13 @@ namespace {
     void redraw();
 
   protected:
-    // Key event handler.
     virtual void key_event(int ch) override;
 
   private:
-    // Reference to the chat interface.
-    lchat *_lchat;
+    lchat *_lchat; // Reference to the chat interface.
 
-    // Input string.
-    std::string _line;
-    size_t _insert;
+    std::string _line; // Input string.
+    size_t _insert; // Cursor location.
 
     std::string _suggest;
 
@@ -210,8 +176,6 @@ namespace {
     std::list<std::string>::iterator _history_iter;
   };
 
-  /**
-   */
   class lchat : protected curs::window, protected curs::resize_event_handler {
   public:
     lchat();
@@ -221,6 +185,7 @@ namespace {
     void scroll_chat(scroll_dir_t dir);
     void page_chat(scroll_dir_t dir);
     void refresh_users(const std::string &list);
+    void adj_users(int amount);
     void update_status();
 
     void operator()();
@@ -243,6 +208,19 @@ namespace {
 
     void _draw();
   };
+
+  /************
+   * hostname *
+   ************/
+
+#if HAVE_GETHOSTNAME
+  std::string hostname() {
+    static char value[_SC_HOST_NAME_MAX] = "\0";
+    if (value[0] == '\0')
+      gethostname(value, _SC_HOST_NAME_MAX - 1);
+    return value;
+  }
+#endif // HAVE_GETHOSTNAME
 
   /****************************************************************************
    * class chat
@@ -273,8 +251,7 @@ namespace {
 
   void chat::scroll(scroll_t value) {
     // Get the chat window size.
-    int w, h;
-    size(w, h);
+    const auto h = height();
 
     // Set offset to the amount to shift the window by.
     int offset = 0;
@@ -299,8 +276,8 @@ namespace {
     } else {
       _buffer_location += offset;
 
-      if (_buffer_location > _scroll_buffer.size() - h)
-        _buffer_location = _scroll_buffer.size() - h;
+      if (_buffer_location > _scroll_buffer.size())
+        _buffer_location = _scroll_buffer.size();
 
       if (h > (int)_scroll_buffer.size())
         _buffer_location = 0;
@@ -377,7 +354,7 @@ namespace {
 
 #ifdef DEBUG
     debug << "Server closed the connection" << std::endl;
-#endif
+#endif // DEBUG
     _connected = false;
   }
 
@@ -386,8 +363,8 @@ namespace {
    ****************/
 
   void chat::redraw() {
-    int w, h;
-    size(w, h);
+    //const auto w = width();
+    const auto h = height();
 
     curs_mtx.lock();
 
@@ -395,16 +372,28 @@ namespace {
     *this << curs::erase << curs::cursor(0, h - 1) << curs::cursor(false);
 
     if (not _scroll_buffer.empty()) {
-      auto it = _scroll_buffer.rend();
+      auto it = _scroll_buffer.crend();
 
       // Find the starting point.
       for (int c = 0;
-           c < h + (int)_buffer_location and it != _scroll_buffer.rbegin();
-           c++, it--);
+           c < h + (int)_buffer_location and it != _scroll_buffer.crbegin();
+           c++, it--) {
+        /*const std::string &line = *it;
+        auto len = line.length();
+        if (line.compare(0, 2, "? ") == 0 or line.compare(0, 2, "! ") == 0)
+          len -= 2;
+          c += (len / w) + (len % w ? 1 : 0) - 1;*/
+      }
 
       // Draw the lines.
-      for (int c = 0; c < h and it != _scroll_buffer.rend(); c++, it++) {
+      for (int c = 0; c < h and it != _scroll_buffer.crend(); c++, it++) {
         this->draw(*it);
+
+        /*const std::string &line = *it;
+        auto len = line.length();
+        if (line.compare(0, 2, "? ") == 0 or line.compare(0, 2, "! ") == 0)
+          len -= 2;
+          c += (len / w) + (len % w ? 1 : 0) - 1;*/
       }
     }
 
@@ -421,7 +410,9 @@ namespace {
    **************/
 
   void chat::draw(const std::string &line) {
-    size_t pos = line.find(": ");
+    /* This just adds visual formatting to the lines.
+     */
+    const auto pos = line.find(": ");
 
     if (line.compare(0, 2, "? ") == 0) {
       // Help message.
@@ -521,8 +512,13 @@ namespace {
     *this << curs::erase << curs::cursor(0, 0) << curs::cursor(false);
 
     // Write the user list.
+    const auto w = width();
     for (auto &user: _users) {
-      *this << user << "\n";
+      // Make sure the name length doesn't exceed the window width.
+      if ((int)user.length() > w) *this << user.substr(0, w);
+      else                        *this << user;
+
+      *this << "\n";
     }
 
     // Flush it to the screen.
@@ -536,10 +532,18 @@ namespace {
    * class status
    */
 
+  /******************
+   * status::status *
+   ******************/
+
   status::status(chat &ch, userlist &ul, int x, int y, int width, int height)
     : curs::window(x, y, width, height), _chat(&ch), _userlist(&ul) {
     *this << curs::scrollok(false);
   }
+
+  /******************
+   * status::redraw *
+   ******************/
 
   void status::redraw() {
     curs_mtx.lock();
@@ -550,28 +554,38 @@ namespace {
 
     std::ostringstream msg;
 
+    // User count.
     if (_userlist->_users.size() == 1)
       msg << _userlist->_users.size() << " user";
     else
       msg << _userlist->_users.size() << " users";
     *this << curs::cursor(1, 0) << msg.str();
 
+    // Scollback buffer stats.
     msg.str("");
     msg << (_chat->_scroll_buffer.size() - _chat->_buffer_location) << "/"
         << chat::scrollback;
     *this << curs::cursor(width() - 4 - msg.str().length(), 0)
           << msg.str();
 
+    // Autoscroll status.
     if (chat::auto_scroll)
-      *this << curs::cursor(width() - 3, 0) << "↧";
+      *this << curs::attron(curs::colors::pair(C_STATUS_ON));
+    else
+      *this << curs::attron(curs::colors::pair(C_STATUS_OFF));
+    *this << curs::cursor(width() - 3, 0) << "↧";
+    if (chat::auto_scroll)
+      *this << curs::attroff(curs::colors::pair(C_STATUS_ON));
+    else
+      *this << curs::attroff(curs::colors::pair(C_STATUS_OFF));
 
+    // Insert/Overwrite status.
     if (insert_mode)
       *this << curs::cursor(width() - 2, 0) << "i";
     else
       *this << curs::cursor(width() - 2, 0) << "o";
 
     *this << std::flush;
-
     curs::terminal::update();
     curs_mtx.unlock();
   }
@@ -734,6 +748,16 @@ namespace {
         _suggest = "";
         break;
 
+      case CTRL('['):
+        _lchat->adj_users(1);
+        _lchat->resize_event();
+        break;
+
+      case CTRL(']'):
+        _lchat->adj_users(-1);
+        _lchat->resize_event();
+        break;
+
       case KEY_DC: // Delete key.
       case CTRL('d'):
         if (not _line.empty() and _insert < _line.size()) {
@@ -827,19 +851,20 @@ namespace {
     // Configure the color theme.
     curs::colors::start();
     if (curs::colors::have()) {
-      curs::colors::pair(C_TITLE, curs::colors::WHITE,
+      curs::colors::pair(C_TITLE, curs::colors::YELLOW,
                          curs::colors::BLUE);
       curs::colors::pair(C_USERNAME, curs::colors::CYAN, -1);
       curs::colors::pair(C_MYMESSAGE, curs::colors::GREEN, -1);
       curs::colors::pair(C_HLPMSG, curs::colors::CYAN, -1);
       curs::colors::pair(C_SYSMSG, curs::colors::BLUE, -1);
       curs::colors::pair(C_PRVMSG, curs::colors::YELLOW, -1);
-      curs::colors::pair(C_STATUS, curs::colors::WHITE,
+      curs::colors::pair(C_STATUS, curs::colors::YELLOW,
                          curs::colors::BLUE);
-      curs::colors::pair(C_STATUS_ON, curs::colors::YELLOW,
+      curs::colors::pair(C_STATUS_ON, curs::colors::GREEN,
                          curs::colors::BLUE);
       curs::colors::pair(C_STATUS_OFF, curs::colors::RED,
                          curs::colors::BLUE);
+      curs::colors::pair(C_DIVIDER, curs::colors::BLUE, -1);
       curs::colors::pair(C_HISTORY, curs::colors::CYAN, -1);
     }
 
@@ -884,6 +909,20 @@ namespace {
     _userlist.update(list);
   }
 
+  /*********************
+   *  lchat::adj_users *
+   *********************/
+
+  void lchat::adj_users(int amount) {
+    if (amount < 0 and _userlist_width <=5) {
+      return;
+    } else if (width() - _userlist_width <= 10) {
+      return;
+    } else {
+      _userlist_width += amount;
+    }
+  }
+
   /*************************
    *  lchat::refresh_users *
    *************************/
@@ -909,8 +948,8 @@ namespace {
     }
 
 #ifdef DEBUG
-    debug << "The chat is disconnected" << std::endl;
-#endif
+    debug << "The chat has been disconnected" << std::endl;
+#endif // DEBUG
 
     // Clean up the chat window thread.
     chat_view.join();
@@ -930,18 +969,14 @@ namespace {
    ************************/
 
   void lchat::resize_event() {
-#ifdef DEBUG
-    debug << "Resize event to ";
-#endif
-
     curs_mtx.lock();
     // Get the new window size.
-    int w, h;
-    size(w, h);
+    const auto w = width();
+    const auto h = height();
 
 #ifdef DEBUG
-    debug << w << "x" << h << std::endl;
-#endif
+    debug << "Resize: " << w << "x" << h << std::endl;
+#endif // DEBUG
 
     // Resize and refresh all the other windows.
     _chat << curs::move(0, 1)
@@ -959,8 +994,8 @@ namespace {
     curs_mtx.unlock();
 
 #ifdef DEBUG
-    debug << " redrawing screen" << std::endl;
-#endif
+    debug << " redrawing the terminal" << std::endl;
+#endif // DEBUG
 
     curs::terminal::clear();
     _draw(); // Redraw ourself.
@@ -977,17 +1012,22 @@ namespace {
   void lchat::_draw() {
     curs_mtx.lock();
 
-    int w, h;
-    size(w, h);
+    const auto w = width();
+    const auto h = height();
 
     // Draw the frames around our windows.
     *this << curs::attron(curs::colors::pair(C_TITLE) | A_BOLD)
           << curs::cursor(0, 0) << std::string(w, ' ');
     std::string title("Local Chat v" VERSION);
+#if HAVE_GETHOSTNAME
+    title += " (" + hostname() + ")";
+#endif // HAVE_GETHOSTNAME
     *this << curs::cursor((w - title.size()) / 2, 0) << title
           << curs::attroff(curs::colors::pair(C_TITLE) | A_BOLD)
           << curs::cursor(w - (_userlist_width + 1), 1)
+          << curs::attron(curs::colors::pair(C_DIVIDER))
           << curs::vline(h - 3)
+          << curs::attroff(curs::colors::pair(C_DIVIDER))
           << std::flush;
 
     // Update the terminal.
@@ -1036,7 +1076,7 @@ namespace {
     chatio << line << std::endl;
 #ifdef DEBUG
     std::clog << "> " << line << std::endl;
-#endif
+#endif // DEBUG
 
     // Pass control to the kernel for a moment to actually deliver the
     // message.
@@ -1053,7 +1093,7 @@ namespace {
 
 #ifdef DEBUG
         std::clog << "< " << in << std::endl;
-#endif
+#endif // DEBUG
       } catch (sockets::ionotready &err) {
         // Nothing ready from the dispatcher, we're done here.
         chatio.clear();
@@ -1099,10 +1139,10 @@ namespace {
    * bot *
    *******/
 
-  /** Fork and execute a shell command piping its IO through the chat's unix
-   * socket.
-   */
   static int bot(const std::string &command) {
+    /* Fork and execute a shell command piping its IO through the chat's unix
+     * socket.
+     */
     auto pid = fork();
     switch (pid) {
     case 0: // Child Process
@@ -1139,7 +1179,9 @@ namespace {
     {"help",        no_argument,       nullptr, 'h' },
     {nullptr,       0,                 nullptr, 0}
   };
-}
+
+} // namespace
+
 /******************************************************************************
  * Program entry point.
  */
@@ -1152,7 +1194,7 @@ int main(int argc, char *argv[]) {
 
 #ifdef DEBUG
   debug.open("lchat.log");
-#endif
+#endif // DEBUG
 
   // Get the command line arguments.
   int opt;
@@ -1191,14 +1233,17 @@ int main(int argc, char *argv[]) {
       if (optopt == 'm') {
         mesg_stdin = true;
       } else {
-        std::cout << "Missing value for option -" << (char)optopt
+        std::cout << "Missing value for option -"
+                  << static_cast<char>(optopt)
                   << std::endl;
         help();
         return EXIT_FAILURE;
       };
       break;
     default:
-      std::cerr << "Unknown option -" << (char)optopt << std::endl;
+      std::cerr << "Unknown option -"
+                << static_cast<char>(optopt)
+                << std::endl;
       help();
       return EXIT_FAILURE;
     }
@@ -1210,7 +1255,7 @@ int main(int argc, char *argv[]) {
   }
 
   // Read the password file to get our user name.
-  struct passwd *pw_entry = getpwuid(getuid());
+  const struct passwd *pw_entry = getpwuid(getuid());
   if (pw_entry == NULL) {
     std::cerr << "Unable to determine who you are:"
               << strerror(errno) << std::endl;
@@ -1269,7 +1314,7 @@ int main(int argc, char *argv[]) {
 
 #ifdef DEBUG
   debug.close();
-#endif
+#endif // DEBUG
 
   return EXIT_SUCCESS;
 }

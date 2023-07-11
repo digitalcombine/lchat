@@ -1,3 +1,14 @@
+Version 1.7.2
+2023-07-10 Ron Wills <ron@digitalcombine.ca>
+
+* Update some colors to the user interface
+* Add hostname to the user interface
+
+Version 1.7.1
+2023-07-02 Ron Wills <ron@digitalcombine.ca>
+
+* Fixed deamon/daemon spelling mistakes
+
 Version 1.7.0
 2023-07-01 Ron Wills <ron@digitalcombine.ca>
 

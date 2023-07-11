@@ -31,6 +31,10 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#if __cplusplus < 201703L
+#error This file requires compiler and library support for the ISO C++ 2017 standard.
+#endif // __cplusplus
+
 #include "nstream"
 #include <iostream>
 #include <sstream>
@@ -61,75 +65,73 @@
 
 namespace {
   // Global settings.
-  static std::string sock_path = STATEDIR "/sock";
-  static std::string cwd_path = STATEDIR;
-  static std::string chat_group;
-  static std::string chat_user;
-  static bool running = true;
+  std::string sock_path = STATEDIR "/sock";
+  std::string cwd_path = STATEDIR;
+  std::string chat_group;
+  std::string chat_user;
+  bool running = true;
 
-  /** Client Connection Class.
-   */
-  class ChatClient : public sockets::connection {
+  class chat_client : public sockets::connection {
   public:
-    ChatClient(int sockfd) : sockets::connection(sockfd) {}
-    virtual ~ChatClient() noexcept;
+    chat_client(int sockfd) : sockets::connection(sockfd) {}
+    virtual ~chat_client() noexcept override;
 
     std::string name() const { return _name; }
 
   protected:
     std::string _name;
 
-    virtual void connect(int sockfd);
-    virtual void recv();
+    virtual void connect(int sockfd) override;
+    virtual void recv() override;
 
   private:
     void send_private(const std::string &who, const std::string &mesg);
   };
 
-  sockets::server<ChatClient> chat_server;
+  sockets::server<chat_client> chat_server;
 
   /***************
    * connections *
    ***************/
 
-  static unsigned int connections(const std::string &name) {
+  unsigned int connections(const std::string &name) {
     /* Count the number of connections a user has to the chat server.
      */
     unsigned int count = 0;
 
     // Count the connections.
     for (auto &it: chat_server)
-      if ((dynamic_cast<ChatClient *>(it.second))->name() == name)
+      if ((dynamic_cast<chat_client *>(it.second))->name() == name)
         count++;
 
 #ifdef DEBUG
     std::clog << "User " << name << " has " << count << " connections."
               << std::endl;
-#endif
+#endif // DEBUG
 
     return count;
   }
 
   /****************************************************************************
-   * class ChatClient
+   * class chat_client
    */
 
-  /***************************
-   * ChatClient::~ChatClient *
-   ***************************/
+  /*****************************
+   * chat_client::~chat_client *
+   *****************************/
 
-  ChatClient::~ChatClient() noexcept {}
+  chat_client::~chat_client() noexcept {}
 
-  /***********************
-   * ChatClient::connect *
-   ***********************/
+  /************************
+   * chat_client::connect *
+   ************************/
 
-  void ChatClient::connect(int sockfd) {
+  void chat_client::connect(int sockfd) {
 
     // Prepare the credentials of the user that connected over the unix socket.
 #if defined(__FreeBSD__)
     struct xucred ucred;
-    int len = sizeof(struct xucred);
+    const auto len = sizeof(struct xucred);
     int oval;
 
     if (setsockopt(sockfd, 0, LOCAL_CREDS, &oval, sizeof(oval)) == -1) {
@@ -138,30 +140,30 @@ namespace {
 #ifdef DEBUG
       std::cerr << "Unable to determine connected peer: " << strerror(errno)
                 << std::endl;
-#endif
+#endif // DEBUG
       throw sockets::exception(
         std::string("Unable to determine connected peer: ") +
         strerror(errno));
     }
-#else
+#else // not defined __FreeBSD__
     struct ucred ucred;
-    int len = sizeof(struct ucred);
-#endif
+    const auto len = sizeof(struct ucred);
+#endif // __FreeBSD__
 
     // Log a new connection was made.
     syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO), "New client connected");
 #ifdef DEBUG
     std::clog << "New client connected" << std::endl;
-#endif
+#endif // DEBUG
 
     // Get the clients UID.
 #if defined(__FreeBSD__)
     if (getsockopt(sockfd, 0, LOCAL_PEERCRED,
                    &ucred, (socklen_t *)&len) == -1) {
-#else
+#else  // not defined __FreeBSD__
     if (getsockopt(sockfd, SOL_SOCKET, SO_PEERCRED,
                    &ucred, (socklen_t *)&len) == -1) {
-#endif
+#endif // __FreeBSD__
       syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
              "Unable to determine connected peer: %s", strerror(errno));
       throw sockets::exception(
@@ -171,17 +173,17 @@ namespace {
 
     // Now get the clients username.
 #if defined(__FreeBSD__)
-    struct passwd *pw_entry = getpwuid(ucred.cr_uid);
-#else
-    struct passwd *pw_entry = getpwuid(ucred.uid);
-#endif
+    const struct passwd *pw_entry = getpwuid(ucred.cr_uid);
+#else // not defined __FreeBSD__
+    const struct passwd *pw_entry = getpwuid(ucred.uid);
+#endif // __FreeBSD__
     if (pw_entry == NULL) {
       syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
              "Unable to determine connected user: %s", strerror(errno));
 #ifdef DEBUG
       std::cerr << "Unable to determine connected peer: " << strerror(errno)
                 << std::endl;
-#endif
+#endif // DEBUG
       throw sockets::exception(
         std::string("Unable to determine connected user: ") +
         strerror(errno));
@@ -193,7 +195,7 @@ namespace {
            "%s has joined the chat", _name.c_str());
 #ifdef DEBUG
     std::clog << _name << " has joined the chat." << std::endl;
-#endif
+#endif // DEBUG
 
     /* Send out notices about the new connection if it is the users first
      * connection to the server. If there is already another connection don't
@@ -201,21 +203,21 @@ namespace {
      */
     if (connections(_name) == 1) {
       for (auto &it: chat_server) {
-        (sockets::iostream &)(*it.second) << _name << " has joined the chat."
-                                          << std::endl;
+        static_cast<sockets::iostream &>(*it.second)
+          << _name << " has joined the chat." << std::endl;
       }
       ios << "? Type '/help' to get a list of chat commands." << std::endl;
     }
   }
 
-  /********************
-   * ChatClient::recv *
-   ********************/
+  /*********************
+   * chat_client::recv *
+   *********************/
 
-  void ChatClient::recv() {
+  void chat_client::recv() {
 #ifdef DEBUG
     std::clog << "Client recv from " << _name << std::endl;
-#endif
+#endif // DEBUG
 
     std::string in;
 
@@ -223,7 +225,7 @@ namespace {
 
 #ifdef DEBUG
       std::clog << "From " << _name << ": " << in << std::endl;
-#endif
+#endif // DEBUG
 
       if (in[0] == '/') {
         // Parse the command sent.
@@ -253,7 +255,7 @@ namespace {
 
           // Use a std::set to prevent duplicates.
           for (auto &it: chat_server) {
-            people.insert((dynamic_cast<ChatClient *>(it.second))->name());
+            people.insert((dynamic_cast<chat_client *>(it.second))->name());
           }
           for (auto &it: people) {
             result += it + " ";
@@ -306,8 +308,8 @@ namespace {
       } else {
         // A message for everyone to see.
         for (auto &it: chat_server) {
-          (sockets::iostream &)(*it.second) << _name << ": " << in
-                                            << std::endl;
+          static_cast<sockets::iostream &>(*it.second)
+            << _name << ": " << in << std::endl;
         }
       }
     }
@@ -316,12 +318,11 @@ namespace {
       // If the socket closed from the client side.
 #ifdef DEBUG
       std::clog << "Client closed the socket" << std::endl;
-#endif
+#endif // DEBUG
       if (connections(_name) < 2) {
         for (auto &it: chat_server) {
-          (sockets::iostream &)(*it.second) << _name
-                                            << " has left the chat."
-                                            << std::endl;
+          static_cast<sockets::iostream &>(*it.second)
+            << _name << " has left the chat." << std::endl;
         }
       }
       ios.clear();
@@ -334,20 +335,19 @@ namespace {
     }
   }
 
-  /****************************
-   * ChatClient::send_private *
-   ****************************/
+  /*****************************
+   * chat_client::send_private *
+   *****************************/
 
-  void ChatClient::send_private(const std::string &who,
+  void chat_client::send_private(const std::string &who,
                                 const std::string &mesg) {
     bool has_user = false;
 
     // Send the private message to all the users connections.
     for (auto &it: chat_server) {
-      if ((dynamic_cast<ChatClient *>(it.second))->name() == who) {
-        (sockets::iostream &)(*it.second) << "! "
-                                          << _name << ": "
-                                          << mesg << std::endl;
+      if ((dynamic_cast<chat_client *>(it.second))->name() == who) {
+        static_cast<sockets::iostream &>(*it.second)
+          << "! " << _name << ": " << mesg << std::endl;
         has_user = true;
       }
     }
@@ -355,21 +355,18 @@ namespace {
     if (has_user) {
       // If a message was sent, send in to all our connections as well.
       for (auto &it: chat_server) {
-        if ((dynamic_cast<ChatClient *>(it.second))->name() == _name) {
-          (sockets::iostream &)(*it.second) << "! ^"
-                                            << who << ": "
-                                            << mesg << std::endl;
+        if ((dynamic_cast<chat_client *>(it.second))->name() == _name) {
+          static_cast<sockets::iostream &>(*it.second)
+            << "! ^" << who << ": " << mesg << std::endl;
         }
       }
     } else {
       // If a message wasn't sent, send an error message our connections.
       for (auto &it: chat_server) {
-        if ((dynamic_cast<ChatClient *>(it.second))->name() == _name) {
-          (sockets::iostream &)(*it.second) << "User "
-                                            << who
-                                            << " is not available, "
-                                            << "private message not sent:\n "
-                                            << mesg << std::endl;
+        if ((dynamic_cast<chat_client *>(it.second))->name() == _name) {
+          static_cast<sockets::iostream &>(*it.second)
+            << "User " << who << " is not available, "
+            << "private message not sent:\n " << mesg << std::endl;
         }
       }
     }
@@ -379,14 +376,14 @@ namespace {
    * test_for_server *
    *******************/
 
-  static bool test_for_server() {
+  bool test_for_server() {
     /*  If a chat server goes down hard, the unix domain socket could have
      * been left in the filesystem. In this case, when we attempt to create
      * the socket we will fail to bind to it.  Here we attempt to connect as
      * a client to see if we can talk to the chat server. If we can't then we
      * have a dead socket to clean up.
      */
-    static sockets::iostream chatio;
+    sockets::iostream chatio;
 
 #ifdef DEBUG
     std::clog << "Testing for existing chat server" << std::endl;
@@ -401,9 +398,11 @@ namespace {
       std::clog << "Failed to talk to server, possible dead socket"
                 << std::endl;
 #endif
+      chatio.close();
       return false;
     }
 
+    chatio.close();
     return true;
   }
 
@@ -411,7 +410,7 @@ namespace {
    * open_unix_socket *
    ********************/
 
-  static void open_unix_socket(bool second_attempt = false) {
+  void open_unix_socket(bool second_attempt = false) {
     /*  Here we attempt to create and open the unix domain socket for the
      * chat server. During hard shutdowns a dead socket could remain on the
      * filesystem preventing the chat server from starting. So here we make
@@ -466,22 +465,21 @@ namespace {
     /* Here we disconnect ourself from any controlling tty or parent process
      * to put ourself into the background.
      */
-    pid_t pid, sid;
 
     syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO),
            "Forking server creating daemon");
 #ifdef DEBUG
     std::clog << "Forking server creating daemon" << std::endl;
-#endif
+#endif // DEBUG
 
     // Fork to create our new process.
-    pid = fork();
+    const auto pid = fork();
     if (pid < 0) {
       syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_WARNING),
              "Failed to fork: %s", strerror(errno));
 #ifdef DEBUG
       std::cerr << "Failed to fork: " << strerror(errno) << std::endl;
-#endif
+#endif // DEBUG
       throw std::runtime_error(std::string("Failed to fork: ") +
                                strerror(errno));
     }
@@ -493,7 +491,7 @@ namespace {
     umask(0117);
 
     // Set the new process as the new session owner.
-    sid = setsid();
+    const auto sid = setsid();
     if (sid < 0) {
       throw std::runtime_error(std::string("Failed to set session id: ") +
                                strerror(errno));
@@ -501,8 +499,9 @@ namespace {
 
     // Switch to our new working directory.
     if ((chdir(cwd_path.c_str())) < 0) {
-      throw std::runtime_error(std::string("Failed to change working directory: ") +
-                               strerror(errno));
+      throw std::runtime_error(
+        std::string("Failed to change working directory: ") +
+        strerror(errno));
     }
 
     // Close all the standard IO files.
@@ -515,11 +514,11 @@ namespace {
    * change_group *
    ****************/
 
-  static void change_group(const std::string &group_name) {
+  void change_group(const std::string &group_name) {
     /* Change the group ownership of the domain socket and the group which we
      * are executing under.
      */
-    struct group *group_entry = getgrnam(group_name.c_str());
+    const struct group *group_entry = getgrnam(group_name.c_str());
 
     // Lookup the system group entry.
     if (group_entry == NULL) {
@@ -554,11 +553,11 @@ namespace {
    * change_user *
    ****************/
 
-  static void change_user(const std::string &user_name) {
+  void change_user(const std::string &user_name) {
     /* Change the user ownership of the domain socket and the user which we
      * are executing under.
      */
-    struct passwd *user_entry = getpwnam(user_name.c_str());
+    const struct passwd *user_entry = getpwnam(user_name.c_str());
 
     // Lookup the system user entry.
     if (user_entry == nullptr) {
@@ -668,7 +667,7 @@ namespace {
  * Entry Point
  */
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) noexcept {
   bool fork_daemon = false;
 
   // Get the command line options.
@@ -708,12 +707,12 @@ int main(int argc, char *argv[]) {
   // Open the logging facility.
   openlog("lchatd", LOG_CONS, LOG_PID);
 
-  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO), "Starting");
+  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO), "Starting local chat service");
 #ifdef DEBUG
-  std::clog << "Starting" << std::endl;
-#endif
+  std::clog << "Starting local chat service" << std::endl;
+#endif // DEBUG
 
-  uid_t saved_uid = getuid();
+  const uid_t saved_uid = getuid();
 
   try {
     // Possible fork as an independant daemon.
@@ -738,7 +737,7 @@ int main(int argc, char *argv[]) {
     syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_ERR), "%s", err.what());
 #ifdef DEBUG
     std::cerr << err.what() << std::endl;
-#endif
+#endif // DEBUG
     return EXIT_FAILURE;
   }
 
@@ -751,10 +750,11 @@ int main(int argc, char *argv[]) {
 
   // Log the fact we're up and runnging.
   syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO),
-         "Local chat listening on socket %s", sock_path.c_str());
+         "Local chat server listening on socket %s", sock_path.c_str());
 #ifdef DEBUG
-  std::clog << "Local chat listening on socket " << sock_path << std::endl;
-#endif
+  std::clog << "Local chat server listening on socket "
+            << sock_path << std::endl;
+#endif // DEBUG
 
   // The main loop.
   while (running) {
@@ -762,8 +762,7 @@ int main(int argc, char *argv[]) {
   }
 
   // Cleanup.
-  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO), "Cleaning up socket");
-  closelog();
+  syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_INFO), "Cleaning up local chat service");
   chat_server.close();
   if (setuid(saved_uid) == -1) {
     syslog(LOG_MAKEPRI(LOG_DAEMON, LOG_NOTICE),
@@ -775,6 +774,7 @@ int main(int argc, char *argv[]) {
            sock_path.c_str(),
            strerror(errno));
   }
+  closelog();
 
   return EXIT_SUCCESS;
 }
